@@ -1,3 +1,5 @@
+const GROUND_TOP = H - 100;   // bord supérieur du sol (notre layer ground)
+const MYO_TARGET_HEIGHT = 120; // hauteur désirée de Myo à l’écran (en px)
 const canvas=document.getElementById('game');const ctx=canvas.getContext('2d');
 const W=canvas.width,H=canvas.height;
 const ASSETS={far:'assets/bg_far.png',mid:'assets/bg_mid.png',ground:'assets/ground.png',myo:'assets/char_myo_spritesheet_light.png'};
