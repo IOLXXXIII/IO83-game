@@ -1,13 +1,36 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IO83 – Side Demo</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IO 83 – Myo Prototype</title>
+  <link rel="preload" as="image" href="/assets/background/bg_back.png">
+  <link rel="preload" as="image" href="/assets/background/bg_mid.png">
+  <link rel="preload" as="image" href="/assets/background/bg_front.png">
+  <link rel="preload" as="image" href="/assets/characters/idle_1.png">
+  <link rel="preload" as="image" href="/assets/characters/walk_1.png">
+  <link rel="preload" as="image" href="/assets/characters/walk_2.png">
+  <link rel="preload" as="image" href="/assets/characters/walk_3.png">
+  <link rel="preload" as="image" href="/assets/characters/walk_4.png">
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-<canvas id="game" width="1920" height="540"></canvas>
-<script src="main.js"></script>
+  <div id="hud">
+    <div id="score">Wanted: <span id="scoreNum">0</span></div>
+    <div id="hint">← → to move · ↑ to jump · Collect your WANTED posters</div>
+  </div>
+
+  <!-- Start gate (required by browsers to unlock audio) -->
+  <div id="gate">
+    <button id="startBtn" aria-label="Start game">Start</button>
+    <p>Click to begin · Audio will start</p>
+  </div>
+
+  <canvas id="game" width="960" height="540" aria-label="IO83 Side Scroller"></canvas>
+
+  <audio id="bgm" src="/assets/audio/bgm_iogame.mp3" preload="auto" loop></audio>
+  <audio id="sfxWanted" src="/assets/audio/sfx_wanted.mp3" preload="auto"></audio>
+
+  <script src="/main.js"></script>
 </body>
 </html>
