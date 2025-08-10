@@ -1,6 +1,6 @@
 // IO83 – Browser 2D Prototype (Canvas 2D)
 // Controls: ← → to move, ↑ to jump. Collect WANTED posters.
-// Backgrounds expected ~1262×267 (ok).
+// Backgrounds ~1262×267
 
 (function(){
   'use strict';
@@ -28,14 +28,13 @@
   const bgm = document.getElementById('bgm');
   const sfxWanted = document.getElementById('sfxWanted');
 
-  // Parallaxe + zoom
+  // Parallax + zoom 1/6
   const PARALLAX = { back: 0.15, mid: 0.45, front: 1.0 };
-  // => on ne voit qu'1/denom de l’image en largeur (donc ici 1/6)
+  // On ne voit qu'1/denom de l’image en largeur (donc zoom = denom)
   const VIEW_FRAC_DENOM = { back: 6, mid: 6, front: 6 };
   const LAYER_ALIGN = 'bottom'; // colle en bas
   // Décalage des pieds (en pixels SOURCE du front layer depuis le bas)
-  // Ajuste 18–26 si besoin pour tomber pile sur ton sol.
-  let FRONT_GROUND_SRC_OFFSET = 22;
+  let FRONT_GROUND_SRC_OFFSET = 22; // ajuste 18–26 selon ton art
 
   // Monde
   const WORLD_LEN = 6200;
@@ -59,9 +58,8 @@
   const MYO_TARGET_HEIGHT = 120;
   const player = { x: 200, y: 0, vy: 0, onGround: true, facing: 'right', state: 'idle', animTime: 0, w: 60, h: 120 };
 
-  // Colliders (hauteurs relatives au sol; y sera fixé après load)
-  const solids = [];
-  solids.push(
+  // Colliders (hauteurs relatives; y fixé après load)
+  const solids = [
     { x:  800, w: 120, h:  40, type: 'rock' },
     { x: 1200, w: 160, h:  60, type: 'rock' },
     { x: 1600, w: 100, h:  40, type: 'rock' },
@@ -70,10 +68,10 @@
     { x: 3100, w: 140, h:  60, type: 'crate' },
     { x: 3400, w:  60, h: 180, type: 'tower' },
     { x: 4550, w: 320, h:  20, type: 'shore' },
-    { x: 4870, w: 260, h:  60, type: 'water' }, // encore solide pour v0
+    { x: 4870, w: 260, h:  60, type: 'water' }, // solide pour v0
     { x: 5400, w: 100, h:  40, type: 'rock' },
     { x: 5750, w: 180, h:  80, type: 'cliff' },
-  );
+  ];
 
   // Posters (hauteur relative; y fixé après load)
   const posters = [];
@@ -86,14 +84,14 @@
   spawnPosters();
   let score = 0;
 
-  // Assets
+  // Assets (chemins RELATIFS, pas de slash initial)
   const loadImage = (src) => new Promise((res, rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
   const ASSETS = {
-    back: '/assets/background/bg_back.png',
-    mid:  '/assets/background/bg_mid.png',
-    front:'/assets/background/bg_front.png',
-    idle: ['/assets/characters/idle_1.png'],
-    walk: ['/assets/characters/walk_1.png','/assets/characters/walk_2.png','/assets/characters/walk_3.png','/assets/characters/walk_4.png']
+    back: 'assets/background/bg_back.png',
+    mid:  'assets/background/bg_mid.png',
+    front:'assets/background/bg_front.png',
+    idle: ['assets/characters/idle_1.png'],
+    walk: ['assets/characters/walk_1.png','assets/characters/walk_2.png','assets/characters/walk_3.png','assets/characters/walk_4.png']
   };
   const images = { back:null, mid:null, front:null, idle:[], walk:[] };
 
@@ -109,21 +107,20 @@
     const groundFromBottom = Math.round(FRONT_GROUND_SRC_OFFSET * frontScale);
     GROUND_Y = H - groundFromBottom;
 
-    // Convertit les hauteurs relatives en positions monde
+    // Convertit hauteurs relatives en positions monde
     const toWorldY = (heightFromGround) => GROUND_Y - heightFromGround;
     for (const r of solids)  r.y = toWorldY(r.h);
-    for (const p of posters) p.y = toWorldY(110); // ~poitrine
+    for (const p of posters) p.y = toWorldY(110);
   }
 
-  // Rendu d’un layer: zoom (1/denom visible), ancré bas, répété en X, parallaxe
+  // Rendu layer: zoom (1/denom visible), bottom-align, tiling X, parallaxe
   function drawLayer(img, parallaxFactor, denom) {
     const W = canvas.width / DPR, H = canvas.height / DPR;
-    const scale = (denom * W) / img.width; // assure qu'on ne voie qu'1/denom
+    const scale = (denom * W) / img.width;
     const dw = Math.round(img.width * scale);
     const dh = Math.round(img.height * scale);
     const y = (LAYER_ALIGN === 'bottom') ? (H - dh) : 0;
 
-    // point de départ avec modulo stable (évite les coutures)
     let xStart = -Math.floor((cameraX * parallaxFactor) % dw);
     if (xStart > 0) xStart -= dw;
 
@@ -132,6 +129,7 @@
     }
   }
 
+  // Myo
   function drawMyo() {
     const frames = player.state === 'walk' ? images.walk : images.idle;
     const fps = player.state === 'walk' ? 8 : 4;
@@ -155,6 +153,7 @@
     ctx.restore();
   }
 
+  // Posters (placeholder visuel)
   function drawPosters() {
     const WICON = POSTER_SIZE, HICON = POSTER_SIZE;
     ctx.save();
@@ -174,6 +173,8 @@
     ctx.restore();
   }
 
+  // Debug hitboxes
+  const DEBUG_SOLIDS = false;
   function drawSolidsDebug() {
     if (!DEBUG_SOLIDS) return;
     ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#00ffff';
@@ -184,7 +185,7 @@
     ctx.restore();
   }
 
-  // AABB + résolution axe par axe
+  // Collisions
   function aabb(ax, ay, aw, ah, bx, by, bw, bh){
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
   }
@@ -206,20 +207,19 @@
     return { x: nx, y: ny, vx, vy };
   }
 
-  // Boucle
+  // Loop
   let last = 0; const MAX_DT = 1/30;
   function loop(ts){ const dt = Math.min((ts - last) / 1000 || 0, MAX_DT); last = ts; update(dt); draw(); requestAnimationFrame(loop); }
 
   function update(dt){
-    // Input → vitesse
     let vx = 0;
     if (keys.has('ArrowRight') || keys.has('d')) { vx += MOVE_SPEED; player.facing = 'right'; }
     if (keys.has('ArrowLeft')  || keys.has('a')) { vx -= MOVE_SPEED; player.facing = 'left'; }
+
     const wantJump = keys.has('ArrowUp') || keys.has('w');
     if (wantJump && player.onGround) { player.vy = -JUMP_VELOCITY; player.onGround = false; }
     player.vy += GRAVITY * dt;
 
-    // Box joueur (plus serrée que le sprite)
     const pw = 44, ph = 110;
     const px = player.x, py = GROUND_Y - ph + player.y;
 
@@ -247,11 +247,10 @@
 
   function draw(){
     const W = canvas.width / DPR, H = canvas.height / DPR;
-    // Remplissage ciel (pas de seams)
+    // Fond de ciel pour éviter tout “blanc”
     ctx.fillStyle = '#0d0f14';
     ctx.fillRect(0, 0, W, H);
 
-    // Parallaxe zoomée (1/6 visible)
     if (images.back)  drawLayer(images.back,  PARALLAX.back,  VIEW_FRAC_DENOM.back);
     if (images.mid)   drawLayer(images.mid,   PARALLAX.mid,   VIEW_FRAC_DENOM.mid);
     if (images.front) drawLayer(images.front, PARALLAX.front, VIEW_FRAC_DENOM.front);
@@ -260,8 +259,6 @@
     drawMyo();
     drawSolidsDebug();
   }
-
-  const DEBUG_SOLIDS = false;
 
   async function boot(){ await loadAll(); requestAnimationFrame(loop); }
 
