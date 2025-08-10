@@ -84,22 +84,49 @@
   spawnPosters();
   let score = 0;
 
-  // Assets (chemins RELATIFS, pas de slash initial)
-  const loadImage = (src) => new Promise((res, rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
-  const ASSETS = {
-    back: 'assets/background/bg_back.png',
-    mid:  'assets/background/bg_mid.png',
-    front:'assets/background/bg_front.png',
-    idle: ['assets/characters/idle_1.png'],
-    walk: ['assets/characters/walk_1.png','assets/characters/walk_2.png','assets/characters/walk_3.png','assets/characters/walk_4.png']
-  };
-  const images = { back:null, mid:null, front:null, idle:[], walk:[] };
+  // Assets (chemins RELATIFS, pas de slash initial) — NOMS CORRECTS : bg_far, bg_mid, ground
+function loadImage(src) {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error('Missing asset: ' + src));
+    i.src = src;
+  });
+}
 
-  async function loadAll() {
-    const [back, mid, front] = await Promise.all([ loadImage(ASSETS.back), loadImage(ASSETS.mid), loadImage(ASSETS.front) ]);
-    images.back = back; images.mid = mid; images.front = front;
-    for (const s of ASSETS.idle) images.idle.push(await loadImage(s));
-    for (const s of ASSETS.walk) images.walk.push(await loadImage(s));
+const ASSETS = {
+  back: 'assets/background/bg_far.png',   // arrière-plan
+  mid:  'assets/background/bg_mid.png',   // milieu
+  front:'assets/background/ground.png',   // sol (layer avant)
+  idle: ['assets/characters/idle_1.png'],
+  walk: ['assets/characters/walk_1.png','assets/characters/walk_2.png','assets/characters/walk_3.png','assets/characters/walk_4.png']
+};
+
+const images = { back:null, mid:null, front:null, idle:[], walk:[] };
+
+async function loadAll() {
+  const [back, mid, front] = await Promise.all([
+    loadImage(ASSETS.back),
+    loadImage(ASSETS.mid),
+    loadImage(ASSETS.front)
+  ]);
+  images.back = back; images.mid = mid; images.front = front;
+
+  for (const s of ASSETS.idle) images.idle.push(await loadImage(s));
+  for (const s of ASSETS.walk) images.walk.push(await loadImage(s));
+
+  // Recalcule le sol d'après le zoom du layer "front" (ground)
+  const W = canvas.width / DPR, H = canvas.height / DPR;
+  const frontScale = (VIEW_FRAC_DENOM.front * W) / images.front.width; // règle 1/6
+  const groundFromBottom = Math.round(FRONT_GROUND_SRC_OFFSET * frontScale);
+  GROUND_Y = H - groundFromBottom;
+
+  // Replace les colliders & posters par rapport au nouveau baseline
+  const toWorldY = (heightFromGround) => GROUND_Y - heightFromGround;
+  for (const r of solids)  r.y = toWorldY(r.h);
+  for (const p of posters) p.y = toWorldY(110);
+}
+
 
     // Recalcul du sol depuis le zoom du front layer (règle 1/6)
     const W = canvas.width / DPR, H = canvas.height / DPR;
