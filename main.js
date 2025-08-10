@@ -1,5 +1,4 @@
-// IO83 – 2D prototype (robuste, chemins adaptés à ta structure)
-// Controls: ← → move, ↑ jump
+// IO83 – 2D prototype (stable, responsive, collecte ↓)
 
 (function(){
   'use strict';
@@ -9,11 +8,10 @@
   const ctx = canvas.getContext('2d', { alpha:false });
   const DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
   function resize(){
-    const w=960,h=540;
-    canvas.style.width=w+'px';
-    canvas.style.height=h+'px';
-    canvas.width=w*DPR; canvas.height=h*DPR;
-    ctx.imageSmoothingEnabled=false;
+    // Buffer logique 1280x720, rendu net quel que soit l’affichage CSS (16:9)
+    const w=1280, h=720;
+    canvas.width = w * DPR; canvas.height = h * DPR;
+    ctx.imageSmoothingEnabled = false;
     ctx.setTransform(DPR,0,0,DPR,0,0);
   }
   resize(); addEventListener('resize', resize);
@@ -25,25 +23,27 @@
   const bgm = document.getElementById('bgm');
   const sfxWanted = document.getElementById('sfxWanted');
 
-  // Parallax + zoom (1/6e visible)
+  // Parallax + zoom (1/6 visible)
   const PARALLAX = { back:0.15, mid:0.45, front:1.0 };
   const VIEW_FRAC_DENOM = { back:6, mid:6, front:6 };
   const LAYER_ALIGN = 'bottom';
-  let FRONT_GROUND_SRC_OFFSET = 18; // ajuste 18–26 si nécessaire
+  // ↓ baisse de 22 → 18 pour coller les pieds au sol
+  let FRONT_GROUND_SRC_OFFSET = 18;
 
   // Monde & physique
   const WORLD_LEN = 6200;
   let cameraX = 0;
 
-  const GRAVITY = 1800;
-  const JUMP_VELOCITY = 800;
+  // Saut plus haut + retombée naturelle
+  const GRAVITY = 2200;
+  const JUMP_VELOCITY = 980;
   const MOVE_SPEED = 340;
-  let GROUND_Y = 440; // recalculé après chargement du layer "ground"
+  let GROUND_Y = 560; // recalculé après chargement du layer "ground"
 
   // Input
   const keys = new Set();
   addEventListener('keydown', (e)=>{
-    if(['ArrowLeft','ArrowRight','ArrowUp','a','d','w'].includes(e.key)) e.preventDefault();
+    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'].includes(e.key)) e.preventDefault();
     keys.add(e.key);
   });
   addEventListener('keyup', (e)=> keys.delete(e.key));
@@ -77,15 +77,16 @@
   spawnPosters();
   let score=0;
 
-  // ===== Loader (chemins EXACTS selon ta capture) =====
+  // Assets (chemins EXACTS selon ta structure)
   const ASSETS = {
     back: 'assets/background/bg_far.png',
     mid:  'assets/background/bg_mid.png',
     front:'assets/background/ground.png',
     idle: ['assets/characters/myo/idle_1.png'],
-    walk: ['assets/characters/myo/walk_1.png','assets/characters/myo/walk_2.png','assets/characters/myo/walk_3.png','assets/characters/myo/walk_4.png']
+    walk: ['assets/characters/myo/walk_1.png','assets/characters/myo/walk_2.png','assets/characters/myo/walk_3.png','assets/characters/myo/walk_4.png'],
+    poster: 'assets/collectibles/wanted.png'
   };
-  const images = { back:null, mid:null, front:null, idle:[], walk:[] };
+  const images = { back:null, mid:null, front:null, idle:[], walk:[], poster:null };
 
   function tryLoad(src){
     return new Promise((resolve)=>{
@@ -98,14 +99,11 @@
 
   async function loadAll(){
     const missing=[];
-    for(const k of ['back','mid','front']){
-      const r=await tryLoad(ASSETS[k]);
-      if(r.ok) images[k]=r.img; else missing.push(ASSETS[k]);
-    }
+    for(const k of ['back','mid','front']){ const r=await tryLoad(ASSETS[k]); if(r.ok) images[k]=r.img; else missing.push(ASSETS[k]); }
     for(const s of ASSETS.idle){ const r=await tryLoad(s); if(r.ok) images.idle.push(r.img); else missing.push(s); }
     for(const s of ASSETS.walk){ const r=await tryLoad(s); if(r.ok) images.walk.push(r.img); else missing.push(s); }
+    { const r=await tryLoad(ASSETS.poster); if(r.ok) images.poster=r.img; /* poster optionnel */ }
 
-    // Bandeau si fichiers manquants (n’empêche pas de démarrer)
     if(missing.length){
       const div=document.createElement('div');
       div.textContent='Missing assets → '+missing.join(', ');
@@ -127,7 +125,7 @@
     for(const p of posters) p.y = toWorldY(110);
   }
 
-  // ===== Rendu =====
+  // Rendu
   function drawLayer(img, parallaxFactor, denom){
     const W = canvas.width/DPR, H = canvas.height/DPR;
     const scale = (denom * W) / img.width; // 1/denom visible
@@ -167,19 +165,23 @@
 
   function drawPosters(){
     ctx.save();
-    ctx.fillStyle='#000'; ctx.strokeStyle='#ffe08a'; ctx.lineWidth=2;
     for(const p of posters){
       if(p.taken) continue;
       const sx=p.x - cameraX, sy=p.y;
       if(sx<-60 || sx>canvas.width/DPR + 60) continue;
-      ctx.fillRect(Math.round(sx), Math.round(sy), POSTER_SIZE, POSTER_SIZE);
-      ctx.strokeRect(Math.round(sx)+0.5, Math.round(sy)+0.5, POSTER_SIZE-1, POSTER_SIZE-1);
-      ctx.font='10px monospace'; ctx.fillStyle='#ffe08a';
-      ctx.fillText('WANTED', Math.round(sx)+3, Math.round(sy)+13);
+      if(images.poster){
+        ctx.drawImage(images.poster, Math.round(sx), Math.round(sy), POSTER_SIZE, POSTER_SIZE);
+      } else {
+        // fallback debug
+        ctx.fillStyle='#000'; ctx.strokeStyle='#ffe08a'; ctx.lineWidth=2;
+        ctx.fillRect(Math.round(sx), Math.round(sy), POSTER_SIZE, POSTER_SIZE);
+        ctx.strokeRect(Math.round(sx)+0.5, Math.round(sy)+0.5, POSTER_SIZE-1, POSTER_SIZE-1);
+      }
     }
     ctx.restore();
   }
 
+  // Collisions
   function aabb(ax,ay,aw,ah,bx,by,bw,bh){
     return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
   }
@@ -195,19 +197,23 @@
     return {x:nx,y:ny,vx,vy};
   }
 
-  // Loop
+  // Boucle
   let last=0; const MAX_DT=1/30;
   function loop(ts){
     const dt = Math.min((ts-last)/1000||0, MAX_DT); last=ts;
 
-    // Update
+    // Input
     let vx=0;
     if(keys.has('ArrowRight')||keys.has('d')){ vx+=MOVE_SPEED; player.facing='right'; }
     if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
     const wantJump = keys.has('ArrowUp')||keys.has('w');
     if(wantJump && player.onGround){ player.vy=-JUMP_VELOCITY; player.onGround=false; }
     player.vy += GRAVITY*dt;
+    // jump-cut (relâche saut = montée écourtée)
+    const jumpHeld = keys.has('ArrowUp')||keys.has('w');
+    if(!jumpHeld && player.vy < -220) player.vy = -220;
 
+    // Mouvements + collisions
     const pw=44, ph=110;
     const px=player.x, py=GROUND_Y - ph + player.y;
     const res=resolveCollisions(px,py,pw,ph,vx*dt,player.vy*dt);
@@ -216,18 +222,24 @@
     player.vy=res.vy;
     if(GROUND_Y + player.y > GROUND_Y){ player.y=0; player.vy=0; player.onGround=true; }
 
-    const W = canvas.width/DPR;
-    cameraX=Math.max(0,Math.min(player.x - W/2, WORLD_LEN - W));
-
-    player.state = Math.abs(vx)>1e-2 ? 'walk' : 'idle';
-    player.animTime += dt;
-
+    // Collecte avec ↓ / S
+    const wantsCollect = keys.has('ArrowDown') || keys.has('s');
     for(const p of posters){
-      if(!p.taken && aabb(player.x-22, GROUND_Y-110+player.y, 44,110, p.x,p.y,p.w,p.h)){
+      if(p.taken) continue;
+      const overlap = aabb(player.x-22, GROUND_Y-110+player.y, 44,110, p.x,p.y,p.w,p.h);
+      if(overlap && wantsCollect){
         p.taken=true; score++; scoreEl.textContent=String(score);
         try{ sfxWanted.currentTime=0; sfxWanted.play(); }catch(_){}
       }
     }
+
+    // Caméra
+    const W = canvas.width/DPR;
+    cameraX=Math.max(0,Math.min(player.x - W/2, WORLD_LEN - W));
+
+    // Anim
+    player.state = Math.abs(vx)>1e-2 ? 'walk' : 'idle';
+    player.animTime += dt;
 
     // Draw
     const Wpx = canvas.width/DPR, Hpx = canvas.height/DPR;
@@ -243,10 +255,10 @@
 
   async function boot(){ await loadAll(); requestAnimationFrame(loop); }
 
-  // Start gate
+  // Start gate + musique
   startBtn.addEventListener('click', async ()=>{
     gate.style.display='none';
-    try{ await bgm.play(); }catch(_){}
+    try{ bgm.currentTime=0; bgm.volume=0.6; await bgm.play(); }catch(_){}
     boot();
   }, { once:true });
 
