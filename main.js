@@ -61,12 +61,14 @@ addEventListener('keyup',   e => keys.delete(e.key));
 let cameraX = 0;
 const worldLength = 5000;
 
-// Joueur
 const player = {
   x: 200,
   facing: 'right',
   animTime: 0,
-  state: 'idle', // 'idle' | 'walk'
+  state: 'idle',   // 'idle' | 'walk' (on gardera simple)
+  y: 0,            // offset vertical (0 = pieds au sol, négatif = en l’air)
+  vy: 0,           // vitesse verticale
+  onGround: true
 };
 
 // Utilitaires
