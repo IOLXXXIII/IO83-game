@@ -1,14 +1,19 @@
-// IO83 – socle stable (Myo only): jump fixe "wave", double jump, posters, audio pré-armé, scroll infini droite
+// IO83 – main.js (socle corrigé)
+// - Double saut strict (1 au sol + 1 en l’air)
+// - Pieds calés sur le haut du visuel ground (+ réglage [ / ])
+// - Audio lancé à la 1re interaction (avec diagnostics)
+// - Saut fixe "wave" (montée rapide / sommet ralenti / chute + rapide)
 
 (function(){
   'use strict';
 
-  // ---------- Banner erreurs ----------
-  function banner(msg){
+  // ---------- Banner erreurs / diagnostics ----------
+  function banner(msg, color='#b00020'){
     const d=document.createElement('div'); d.textContent=msg;
     Object.assign(d.style,{position:'fixed',top:'0',left:'0',right:'0',padding:'8px 12px',
-      background:'#b00020',color:'#fff',font:'12px/1.2 monospace',zIndex:'9999'});
+      background:color,color:'#fff',font:'12px/1.2 monospace',zIndex:'9999'});
     document.body.appendChild(d);
+    setTimeout(()=>d.remove(), 5000);
   }
   window.addEventListener('error', e=>banner('JS error → '+(e?.error?.message||e?.message||'unknown')));
 
@@ -23,64 +28,88 @@
   const scoreEl=document.getElementById('scoreNum');
   const gate=document.getElementById('gate');
   const startBtn=document.getElementById('startBtn');
-  const bgm=document.getElementById('bgm');
-  const sfx=document.getElementById('sfxWanted');
+  const bgm=document.getElementById('bgm');            // src: assets/audio/bgm_iogame.mp3
+  const sfx=document.getElementById('sfxWanted');      // src: assets/audio/sfx_wanted.mp3
 
-  // Pré-armement audio (joue muet, unmute au 1er geste)
-  let bgmArmed=false;
-  function prewarmBGM(){ if(!bgm) return; try{ bgm.loop=true; bgm.volume=0; bgm.muted=true; const p=bgm.play(); if(p&&p.catch) p.catch(()=>{});}catch(_){} }
-  function fadeTo(el,to=0.6,ms=700){ const v0=el.volume,t0=performance.now(); function step(t){ const k=Math.min(1,(t-t0)/ms); el.volume=v0+(to-v0)*k; if(k<1) requestAnimationFrame(step);} requestAnimationFrame(step); }
-  function armBGM(){ if(!bgm||bgmArmed) return; bgmArmed=true; bgm.muted=false; if(bgm.volume===0) bgm.volume=0.01; fadeTo(bgm,0.6,700); }
-  prewarmBGM();
-  function onFirstInteract(){ armBGM(); }
-  addEventListener('keydown', onFirstInteract, { once:true });
-  canvas.addEventListener('pointerdown', onFirstInteract, { once:true, passive:true });
+  let audioArmed=false;
+  function initAudioOnce(){
+    if(audioArmed) return; audioArmed=true;
+    if(!bgm){ banner('Audio element #bgm manquant'); return; }
+    bgm.volume=0.6; bgm.muted=false;
+    // Diagnostics basiques
+    bgm.addEventListener('canplaythrough', ()=>banner('BGM ready', '#146C43'), {once:true});
+    bgm.addEventListener('error', ()=>banner('BGM error: vérifie assets/audio/bgm_iogame.mp3'), {once:true});
+    const play = bgm.play();
+    if(play && play.catch) play.catch(()=>banner('Autoplay bloqué: appuie sur une touche ou clique dans la page'));
+  }
+  // Arme l’audio sur TOUTE interaction (avant même Start)
+  addEventListener('pointerdown', initAudioOnce, {passive:true});
+  addEventListener('keydown',     initAudioOnce);
 
   // ---------- Parallax / Layout ----------
   const PARALLAX={back:0.15, mid:0.45, front:1.0};
-  const VIEW_DEN={back:6, mid:6, front:6}; // 1/6 visible (zoom)
+  const VIEW_DEN={back:6, mid:6, front:6}; // 1/6 visible
   const LAYER_ALIGN='bottom';
-  let FRONT_GROUND_SRC_OFFSET=18; // ajuste fin si besoin
   let cameraX=0;
 
-  // ---------- Physique ----------
+  // --- Alignement sol depuis le visuel "ground"
+  // GROUND_SRC_OFFSET = distance (en pixels source) entre le bas de l’image ground et la LIGNE DE SOL.
+  // Ajustable en live avec [ et ] ; persistance via localStorage.
+  let GROUND_SRC_OFFSET = parseInt(localStorage.getItem('GROUND_SRC_OFFSET')||'18',10);
+  let GROUND_Y = 560; // recalculé après chargement du ground
+  function recalcGround(){
+    const W=canvas.width/DPR, H=canvas.height/DPR;
+    if(images.front){
+      const scale=(VIEW_DEN.front*W)/images.front.width;
+      const groundFromBottom=Math.round(GROUND_SRC_OFFSET*scale);
+      GROUND_Y = H - groundFromBottom;
+    }
+  }
+  // Raccourcis pour ajuster rapidement
+  addEventListener('keydown', (e)=>{
+    if(e.key===']'){ GROUND_SRC_OFFSET++; localStorage.setItem('GROUND_SRC_OFFSET', GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
+    if(e.key==='['){ GROUND_SRC_OFFSET--; localStorage.setItem('GROUND_SRC_OFFSET', GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
+  });
+
+  // ---------- Physique (saut fixe "wave") ----------
   const MOVE_SPEED=360;
   const MYO_H=120;
 
-  // Jump fixe "wave" (type Towerfall simplifié) :
-  // montée rapide (gravité faible), sommet ralenti, chute plus rapide.
-  // Hauteur cible ~200 px (tu m'as demandé /3 par rapport à 600).
+  // Hauteur cible ~200px (tu avais demandé /3 vs 600)
   const GRAVITY_UP   = 2600;
   const GRAVITY_DOWN = 2600 * 2.2;
   const TARGET_JUMP_HEIGHT = 200;
-  const JUMP_VELOCITY = Math.sqrt(2 * GRAVITY_UP * TARGET_JUMP_HEIGHT); // ≈ 1020 px/s
-  const MAX_JUMPS = 2;
-  const COYOTE_TIME = 0.10;  // tolérance après ledge
-  const JUMP_BUFFER = 0.12;  // tampon d'appui
-  let coyote = 0, jumpBuf = 0;
+  const JUMP_VELOCITY = Math.sqrt(2 * GRAVITY_UP * TARGET_JUMP_HEIGHT); // ~1020 px/s
 
-  let GROUND_Y=560; // recalculé après load
+  // Double-saut STRICT: 1 saut au sol + 1 saut aérien max
+  const AIR_JUMPS = 1;  // <= ne JAMAIS changer pour ne pas retomber sur un triple
+  let airJumpsUsed = 0;
+
+  // Qualité de vie
+  const COYOTE_TIME = 0.10;  // tolérance après bord
+  const JUMP_BUFFER = 0.12;  // tampon d’appui
+  let coyote=0, jumpBuf=0;
 
   // ---------- Input ----------
   const keys=new Set();
   addEventListener('keydown',e=>{
-    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'].includes(e.key)) e.preventDefault();
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s','[',']'].includes(e.key)) e.preventDefault();
     keys.add(e.key);
-    if(e.key==='ArrowUp'||e.key==='w') jumpBuf = JUMP_BUFFER; // buffer de saut
+    if(e.key==='ArrowUp'||e.key==='w') jumpBuf = JUMP_BUFFER; // on enregistre l'intention
   });
   addEventListener('keyup',e=>keys.delete(e.key));
 
   // ---------- Player (Myo only) ----------
-  const player={ x:0, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0, jumpsLeft:MAX_JUMPS };
+  const player={ x:0, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0 };
 
-  // ---------- Monde minimal (pas d'obstacles; scroll infini à droite) ----------
-  const POSTER_SIZE=46;                 // un poil plus grand
-  const POSTER_Y_ABOVE_GROUND=150;      // plus haut
+  // ---------- Posters ----------
+  const POSTER_SIZE=46;                 // un poil + grand
+  const POSTER_Y_ABOVE_GROUND=150;      // un peu + haut
   const COLLECT_RADIUS=56;              // zone large symétrique
   const COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[];
-  (function spawnPosters(){
-    const segLen=5000, repeats=2; // 2 segments vers la droite (augmente si tu veux)
+  (function spawn(){
+    const segLen=5000, repeats=2;
     const base=[600,1100,1500,2050,2450,2950,3350,3650,4250,4650];
     for(let k=0;k<repeats;k++){
       for(const x of base) posters.push({ x:x+k*segLen, y:0, w:POSTER_SIZE, h:POSTER_SIZE, taking:false, t:0, taken:false });
@@ -88,7 +117,7 @@
   })();
   let score=0;
 
-  // ---------- Assets (noms uniques Myo + cache-bust) ----------
+  // ---------- Assets (Myo noms uniques + cache-bust) ----------
   const CB='?cb='+Date.now();
   const ASSETS={
     back :'assets/background/bg_far.png'+CB,
@@ -120,13 +149,10 @@
 
     if(miss.length) banner('Missing assets → '+miss.join(', '));
 
-    // Sol via "front"
-    const W=canvas.width/DPR, H=canvas.height/DPR;
-    if(images.front){
-      const scale=(VIEW_DEN.front*W)/images.front.width;
-      const groundFromBottom=Math.round(FRONT_GROUND_SRC_OFFSET*scale);
-      GROUND_Y=H-groundFromBottom;
-    }
+    // recalcul sol depuis ground
+    recalcGround();
+
+    // positionne posters
     const toWorldY=h=>GROUND_Y-h;
     for(const p of posters) p.y=toWorldY(POSTER_Y_ABOVE_GROUND);
   }
@@ -177,28 +203,29 @@
     if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
     player.x = Math.max(0, player.x + vx*dt); // gauche bloquée, droite libre
 
-    // QoL timers
-    if(player.onGround) coyote = COYOTE_TIME; else coyote = Math.max(0, coyote - dt);
+    // Timers QoL
+    if(player.onGround) { coyote = COYOTE_TIME; airJumpsUsed = 0; } // reset air jump au sol
+    else                { coyote = Math.max(0, coyote - dt); }
     jumpBuf = Math.max(0, jumpBuf - dt);
 
-    // Saut fixe (double)
+    // Déclenchement saut (fixe) avec double-saut strict
     const wantJump = jumpBuf > 0;
-    if (wantJump && (player.onGround || coyote > 0 || player.jumpsLeft > 0)) {
-      if (!player.onGround && coyote<=0) player.jumpsLeft--;
-      player.vy = -JUMP_VELOCITY; // hauteur fixe
-      player.onGround = false;
-      jumpBuf = 0;
+    if (wantJump) {
+      if (player.onGround || coyote > 0) {
+        player.vy = -JUMP_VELOCITY; player.onGround=false; jumpBuf=0;
+      } else if (airJumpsUsed < AIR_JUMPS) {
+        airJumpsUsed++; player.vy = -JUMP_VELOCITY; jumpBuf=0;
+      }
     }
 
     // Gravité "wave"
     if (player.vy < 0) player.vy += GRAVITY_UP   * dt; // montée (vy négatif)
     else               player.vy += GRAVITY_DOWN * dt; // descente (vy positif)
 
-    // Vertical
+    // Vertical & sol
     player.y += player.vy * dt;
-    if (GROUND_Y + player.y > GROUND_Y) {
-      player.y=0; player.vy=0;
-      if(!player.onGround){ player.onGround=true; player.jumpsLeft=MAX_JUMPS; }
+    if (GROUND_Y + player.y > GROUND_Y) { // touche la ligne sol
+      player.y=0; player.vy=0; player.onGround=true;
     } else {
       player.onGround=false;
     }
@@ -217,7 +244,7 @@
         p.t += dt;
         if(p.t >= COLLECT_DUR){
           p.taken=true; score++; scoreEl.textContent=String(score);
-          try{ sfx.currentTime=0; sfx.play(); }catch(_){}
+          try{ sfx.currentTime=0; sfx.play(); }catch(_){ banner('SFX error: assets/audio/sfx_wanted.mp3 ?'); }
         }
       }
     }
@@ -242,12 +269,13 @@
   }
 
   // ---------- Boot ----------
+  const images={ back:null, mid:null, front:null, myoIdle:[], myoWalk:[], poster:null };
   async function boot(){ await loadAll(); requestAnimationFrame(loop); }
 
   // Start
   startBtn.addEventListener('click', ()=>{
     gate.style.display='none';
-    armBGM();
+    initAudioOnce(); // lance vraiment la musique si pas déjà fait
     boot();
   }, { once:true });
 
