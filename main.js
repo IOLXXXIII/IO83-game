@@ -18,6 +18,42 @@ const WALK_FPS = 8;             // vitesse anim marche
 // Déplacements
 const SPEED = 3.2;
 
+function update(dt) {
+  // Mouvement horizontal
+  let vx = 0;
+  if (keys.has('ArrowRight') || keys.has('d')) { vx =  SPEED; player.facing = 'right'; }
+  if (keys.has('ArrowLeft')  || keys.has('a')) { vx = -SPEED; player.facing = 'left'; }
+  player.x = Math.max(0, Math.min(worldLength, player.x + vx));
+
+  // --- Saut / Gravité ---
+  // déclenche le saut une seule fois quand on est au sol
+  const wantJump = keys.has('ArrowUp') || keys.has('w');
+  if (wantJump && player.onGround) {
+    player.vy = -JUMP_POWER;   // impulsion vers le haut
+    player.onGround = false;
+  }
+
+  // gravité + mouvement vertical
+  player.vy += GRAVITY * dt;
+  player.y  += player.vy * dt;   // y > 0 = descend, y < 0 = monte
+
+  // collision avec le sol (pieds)
+  if (player.y > 0) {
+    player.y = 0;
+    player.vy = 0;
+    player.onGround = true;
+  }
+
+  // Caméra
+  cameraX = Math.max(0, Math.min(player.x - W / 2, worldLength - W));
+
+  // État & animation
+  const moving = Math.abs(vx) > 0.01;
+  player.state = moving ? 'walk' : 'idle';
+  player.animTime += dt;
+}
+
+
 // Parallaxe : chemins des layers (tu remplaceras par tes PNG)
 const ASSETS = {
   far: 'assets/bg_far.png',
