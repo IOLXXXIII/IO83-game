@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>IO 83 – Myo Prototype</title>
 
-  <!-- PRELOADS (relatifs, pas de slash initial) -->
-  <link rel="preload" as="image" href="assets/background/bg_back.png">
+  <!-- PRELOADS (chemins RELATIFS, conformes à ta structure) -->
+  <link rel="preload" as="image" href="assets/background/bg_far.png">
   <link rel="preload" as="image" href="assets/background/bg_mid.png">
-  <link rel="preload" as="image" href="assets/background/bg_front.png">
-  <link rel="preload" as="image" href="assets/characters/idle_1.png">
-  <link rel="preload" as="image" href="assets/characters/walk_1.png">
-  <link rel="preload" as="image" href="assets/characters/walk_2.png">
-  <link rel="preload" as="image" href="assets/characters/walk_3.png">
-  <link rel="preload" as="image" href="assets/characters/walk_4.png">
+  <link rel="preload" as="image" href="assets/background/ground.png">
+  <link rel="preload" as="image" href="assets/characters/myo/idle_1.png">
+  <link rel="preload" as="image" href="assets/characters/myo/walk_1.png">
+  <link rel="preload" as="image" href="assets/characters/myo/walk_2.png">
+  <link rel="preload" as="image" href="assets/characters/myo/walk_3.png">
+  <link rel="preload" as="image" href="assets/characters/myo/walk_4.png">
 
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -30,7 +30,7 @@
 
   <canvas id="game" width="960" height="540" aria-label="IO83 Side Scroller"></canvas>
 
-  <!-- AUDIO (relatifs) -->
+  <!-- AUDIO (facultatif, si tu n'as pas encore mis les fichiers ce n'est pas bloquant) -->
   <audio id="bgm" src="assets/audio/bgm_iogame.mp3" preload="auto" loop></audio>
   <audio id="sfxWanted" src="assets/audio/sfx_wanted.mp3" preload="auto"></audio>
 
