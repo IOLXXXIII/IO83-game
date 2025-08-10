@@ -17,3 +17,6 @@ body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
+
+body { align-items: center; justify-content: center; }
+#game { transform: translateY(6vh); } /* pousse la canvas vers le bas */
