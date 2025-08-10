@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>IO 83 – Myo Prototype</title>
 
-  <!-- PRELOADS (chemins RELATIFS, conformes à ta structure) -->
+  <!-- PRELOADS -->
   <link rel="preload" as="image" href="assets/background/bg_far.png">
   <link rel="preload" as="image" href="assets/background/bg_mid.png">
   <link rel="preload" as="image" href="assets/background/ground.png">
@@ -14,13 +14,14 @@
   <link rel="preload" as="image" href="assets/characters/myo/walk_2.png">
   <link rel="preload" as="image" href="assets/characters/myo/walk_3.png">
   <link rel="preload" as="image" href="assets/characters/myo/walk_4.png">
+  <link rel="preload" as="image" href="assets/collectibles/wanted.png">
 
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="hud">
     <div id="score">Wanted: <span id="scoreNum">0</span></div>
-    <div id="hint">← → to move · ↑ to jump · Collect your WANTED posters</div>
+    <div id="hint">← → to move · ↑ to jump · ⬇ to collect posters</div>
   </div>
 
   <div id="gate">
@@ -28,9 +29,10 @@
     <p>Click to begin · Audio will start</p>
   </div>
 
-  <canvas id="game" width="960" height="540" aria-label="IO83 Side Scroller"></canvas>
+  <!-- 16:9 canvas -->
+  <canvas id="game" width="1280" height="720" aria-label="IO83 Side Scroller"></canvas>
 
-  <!-- AUDIO (facultatif, si tu n'as pas encore mis les fichiers ce n'est pas bloquant) -->
+  <!-- AUDIO -->
   <audio id="bgm" src="assets/audio/bgm_iogame.mp3" preload="auto" loop></audio>
   <audio id="sfxWanted" src="assets/audio/sfx_wanted.mp3" preload="auto"></audio>
 
