@@ -29,7 +29,7 @@
   const PARALLAX = { back:0.15, mid:0.45, front:1.0 };
   const VIEW_FRAC_DENOM = { back:6, mid:6, front:6 };
   const LAYER_ALIGN = 'bottom';
-  let FRONT_GROUND_SRC_OFFSET = 22; // ajuste 18–26 si nécessaire
+  let FRONT_GROUND_SRC_OFFSET = 18; // ajuste 18–26 si nécessaire
 
   // Monde & physique
   const WORLD_LEN = 6200;
