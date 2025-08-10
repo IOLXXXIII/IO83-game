@@ -1,2 +1,19 @@
-html,body{margin:0;background:#000;height:100%;overflow:hidden}
-#game{display:block;margin:0 auto;image-rendering:pixelated;image-rendering:crisp-edges}
+html, body {
+  margin: 0;
+  height: 100vh;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Centre la canvas au milieu (barres noires haut/bas si l’écran est plus grand) */
+body {
+  display: flex;
+  align-items: center;   /* centre verticalement */
+  justify-content: center; /* centre horizontalement */
+}
+
+/* Rendu pixel net */
+#game {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
