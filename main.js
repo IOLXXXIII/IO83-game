@@ -1,9 +1,9 @@
-// IO83 – main.js (double jump, pick ↓ avec vibration, fix blocage)
+// IO83 – main.js (fix MOVE_SPEED, double jump, pickup ↓ + vibration, audio robuste)
 
 (function(){
   'use strict';
 
-  // --- Banner diag
+  // ---- Banner diag (affiche erreurs en haut)
   function banner(msg){
     const d=document.createElement('div'); d.textContent=msg;
     Object.assign(d.style,{position:'fixed',top:'0',left:'0',right:'0',padding:'8px 12px',
@@ -12,48 +12,55 @@
   }
   window.addEventListener('error', e=>banner('JS error → '+(e?.error?.message||e?.message||'unknown')));
 
-  // --- Canvas/HiDPI
+  // ---- Canvas/HiDPI
   const canvas=document.getElementById('game');
   const ctx=canvas.getContext('2d',{alpha:false});
   const DPR=Math.max(1,Math.floor(window.devicePixelRatio||1));
   function resize(){ const w=1280,h=720; canvas.width=w*DPR; canvas.height=h*DPR; ctx.imageSmoothingEnabled=false; ctx.setTransform(DPR,0,0,DPR,0,0); }
   resize(); addEventListener('resize',resize);
 
-  // --- UI/Audio
+  // ---- UI/Audio
   const scoreEl=document.getElementById('scoreNum');
   const gate=document.getElementById('gate');
   const startBtn=document.getElementById('startBtn');
   const bgm=document.getElementById('bgm');
   const sfxWanted=document.getElementById('sfxWanted');
 
-  // --- Parallaxe + zoom 1/6
+  // ---- Parallaxe + zoom 1/6
   const PARALLAX={back:0.15, mid:0.45, front:1.0};
   const VIEW_FRAC_DENOM={back:6, mid:6, front:6};
   const LAYER_ALIGN='bottom';
   let FRONT_GROUND_SRC_OFFSET=18; // ajuste 18–26 si besoin
 
-  // --- Monde/physique
-  const WORLD_LEN=8000; // un peu plus long
+  // ---- Monde/physique
+  const WORLD_LEN=8000;
   let cameraX=0;
 
-  // Saut plus haut + retombée naturelle + double saut
-  const GRAVITY=2700;            // plus de pesanteur
-  const FALL_MULTIPLIER=1.35;    // tombe plus vite que montée
-  const JUMP_VELOCITY=1050;      // impulsion de saut
-  const JUMP_CUT_VELOCITY=-260;  // si on relâche tôt
-  const MAX_JUMPS=2;             // double saut
-  let GROUND_Y=560;              // recalculé après load
+  // Vitesse horizontale (oublie réparée)
+  const MOVE_SPEED=360;
 
-  // --- Input
+  // Saut plus haut + retombée naturelle + double saut
+  const GRAVITY=2700;
+  const FALL_MULTIPLIER=1.35;
+  const JUMP_VELOCITY=1050;
+  const JUMP_CUT_VELOCITY=-260;
+  const MAX_JUMPS=2;
+  let GROUND_Y=560; // recalculé après load
+
+  // ---- Input
   const keys=new Set();
-  addEventListener('keydown',e=>{ if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'].includes(e.key)) e.preventDefault(); keys.add(e.key); });
+  addEventListener('keydown',e=>{
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s','m','M'].includes(e.key)) e.preventDefault();
+    keys.add(e.key);
+    if((e.key==='m'||e.key==='M')) tryPlayBGM(); // M pour (re)lancer la musique si bloquée
+  });
   addEventListener('keyup',e=>keys.delete(e.key));
 
-  // --- Player
+  // ---- Player
   const MYO_TARGET_HEIGHT=120;
   const player={ x:200, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0, jumpsLeft:MAX_JUMPS, prevJump:false };
 
-  // --- Colliders (repoussés plus loin pour éviter blocage précoce)
+  // ---- Colliders (repoussés pour éviter blocage tôt)
   const solids=[
     { x:2200, w:120, h: 40, type:'rock' },
     { x:2600, w:160, h: 60, type:'rock' },
@@ -68,17 +75,17 @@
     { x:6500, w:180, h: 80, type:'cliff' },
   ];
 
-  // --- Posters (pickup ↓, zone élargie + vibration)
+  // ---- Posters (pickup ↓, zone élargie + vibration)
   const posters=[]; const POSTER_SIZE=36; const COLLECT_MARGIN=24; const COLLECT_DUR=0.15; const COLLECT_AMP=6;
   function spawnPosters(){
-    const spots=[600,1100,1500,2050,2450,2950,3350,3650,4250,4650,5200,5600,6000, 7000,7600];
+    const spots=[600,1100,1500,2050,2450,2950,3350,3650,4250,4650,5200,5600,6000,7000,7600];
     posters.length=0;
     for(const x of spots) posters.push({ x, y:-110, w:POSTER_SIZE, h:POSTER_SIZE, taken:false, collecting:false, t:0 });
   }
   spawnPosters();
   let score=0;
 
-  // --- Assets
+  // ---- Assets
   const ASSETS={
     back:'assets/background/bg_far.png',
     mid:'assets/background/bg_mid.png',
@@ -115,7 +122,7 @@
     for(const p of posters) p.y=toWorldY(110);
   }
 
-  // --- Render helpers
+  // ---- Render
   function drawLayer(img, f, denom){
     const W=canvas.width/DPR, H=canvas.height/DPR;
     const scale=(denom*W)/img.width;
@@ -151,17 +158,17 @@
     ctx.restore();
   }
 
-  // --- Collisions
+  // ---- Collisions
   function aabb(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
   function resolve(px,py,pw,ph,vx,vy){
-    const near=solids.filter(r=>Math.abs(r.x-px)<400); // fenêtre plus serrée
+    const near=solids.filter(r=>Math.abs(r.x-px)<400);
     let nx=px+vx, ny=py+vy;
     for(const r of near){ if(aabb(nx,ny,pw,ph,r.x,r.y,r.w,r.h)){ if(vx>0) nx=r.x-pw; else if(vx<0) nx=r.x+r.w; vx=0; } }
     for(const r of near){ if(aabb(nx,ny,pw,ph,r.x,r.y,r.w,r.h)){ if(vy>0){ ny=r.y-ph; vy=0; player.onGround=true; } else if(vy<0){ ny=r.y+r.h; vy=0; } } }
     return {x:nx,y:ny,vx,vy};
   }
 
-  // --- Loop
+  // ---- Loop
   let last=0; const MAX_DT=1/30;
   function loop(ts){
     const dt=Math.min((ts-last)/1000||0,MAX_DT); last=ts;
@@ -171,7 +178,7 @@
     if(keys.has('ArrowRight')||keys.has('d')){ vx+=MOVE_SPEED; player.facing='right'; }
     if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
 
-    // Jump (double saut)
+    // Jump (double)
     const jump=keys.has('ArrowUp')||keys.has('w');
     if(jump && !player.prevJump){
       if(player.onGround){ player.vy=-JUMP_VELOCITY; player.onGround=false; player.jumpsLeft=MAX_JUMPS-1; }
@@ -179,7 +186,7 @@
     }
     player.prevJump=jump;
 
-    // Gravité (plus forte à la descente)
+    // Gravité (plus forte en chute)
     if(player.vy>0) player.vy += GRAVITY*FALL_MULTIPLIER*dt;
     else            player.vy += GRAVITY*dt;
     if(!jump && player.vy<JUMP_CUT_VELOCITY) player.vy=JUMP_CUT_VELOCITY;
@@ -194,7 +201,7 @@
     if(GROUND_Y+player.y>GROUND_Y){ player.y=0; player.vy=0; player.onGround=true; }
     if(player.onGround) player.jumpsLeft=MAX_JUMPS;
 
-    // Collecte (↓ ou S) avec zone élargie + vibration avant disparition
+    // Collecte (↓ / S) — zone élargie + vibration
     const wantsCollect=keys.has('ArrowDown')||keys.has('s');
     for(const p of posters){
       if(p.taken) continue;
@@ -211,11 +218,9 @@
       }
     }
 
-    // Caméra
+    // Caméra + anim
     const W=canvas.width/DPR;
     cameraX=Math.max(0,Math.min(player.x-W/2, WORLD_LEN-W));
-
-    // Anim
     player.state=Math.abs(vx)>1e-2?'walk':'idle';
     player.animTime+=dt;
 
@@ -232,16 +237,25 @@
 
   async function boot(){ await loadAll(); requestAnimationFrame(loop); }
 
+  // ---- Audio helpers
+  function tryPlayBGM(){
+    if(!bgm) return;
+    try{
+      bgm.currentTime=0; bgm.volume=0.6;
+      const p=bgm.play();
+      if(p && p.catch) p.catch(()=>banner('Audio bloqué: presse Start ou M (bgm_iogame.mp3)'));
+    }catch(_){ banner('Audio introuvable: assets/audio/bgm_iogame.mp3'); }
+  }
+
   // Start + musique
   startBtn.addEventListener('click', async ()=>{
     gate.style.display='none';
-    try{
-      if(!bgm || !bgm.src) banner('Audio: placez assets/audio/bgm_iogame.mp3');
-      bgm.currentTime=0; bgm.volume=0.6;
-      await bgm.play();
-    }catch(e){ banner('Audio bloqué ou introuvable (bgm_iogame.mp3)'); }
+    tryPlayBGM();
     boot();
   }, { once:true });
+
+  // Si l’utilisateur clique/touche le canvas, on retente l’audio
+  canvas.addEventListener('pointerdown', tryPlayBGM, { passive:true });
 
   addEventListener('keydown', function anyKeyStart(){
     if(gate && gate.style.display!=='none'){ startBtn.click(); }
