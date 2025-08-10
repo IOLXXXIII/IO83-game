@@ -5,6 +5,10 @@ const ctx = canvas.getContext('2d');
 const W = canvas.width;   // 1920
 const H = canvas.height;  // 540
 
+// Physique (pixels / seconde)
+const GRAVITY     = 1400;  // force qui ramène au sol
+const JUMP_POWER  = 650;   // impulsion du saut
+
 // Réglages sol & taille perso
 const GROUND_TOP = H - 100;     // bord supérieur du layer "ground"
 const MYO_TARGET_HEIGHT = 120;  // taille souhaitée de Myo (px)
