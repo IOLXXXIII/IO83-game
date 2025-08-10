@@ -1,7 +1,7 @@
 // IO83 – main.js (socle corrigé)
 // - Double saut strict (1 au sol + 1 en l’air)
-// - Pieds calés sur le haut du visuel ground (+ réglage [ / ])
-// - Audio lancé à la 1re interaction (avec diagnostics)
+// - Pieds calés sur le haut du visuel ground (+ réglage [ / ] mémorisé)
+// - Audio lancé à la 1re interaction (diag si bloqué / introuvable)
 // - Saut fixe "wave" (montée rapide / sommet ralenti / chute + rapide)
 
 (function(){
@@ -28,19 +28,18 @@
   const scoreEl=document.getElementById('scoreNum');
   const gate=document.getElementById('gate');
   const startBtn=document.getElementById('startBtn');
-  const bgm=document.getElementById('bgm');            // src: assets/audio/bgm_iogame.mp3
-  const sfx=document.getElementById('sfxWanted');      // src: assets/audio/sfx_wanted.mp3
+  const bgm=document.getElementById('bgm');            // assets/audio/bgm_iogame.mp3
+  const sfx=document.getElementById('sfxWanted');      // assets/audio/sfx_wanted.mp3
 
   let audioArmed=false;
   function initAudioOnce(){
     if(audioArmed) return; audioArmed=true;
     if(!bgm){ banner('Audio element #bgm manquant'); return; }
     bgm.volume=0.6; bgm.muted=false;
-    // Diagnostics basiques
     bgm.addEventListener('canplaythrough', ()=>banner('BGM ready', '#146C43'), {once:true});
     bgm.addEventListener('error', ()=>banner('BGM error: vérifie assets/audio/bgm_iogame.mp3'), {once:true});
-    const play = bgm.play();
-    if(play && play.catch) play.catch(()=>banner('Autoplay bloqué: appuie sur une touche ou clique dans la page'));
+    const p=bgm.play();
+    if(p && p.catch) p.catch(()=>banner('Autoplay bloqué: appuie sur une touche ou clique dans la page'));
   }
   // Arme l’audio sur TOUTE interaction (avant même Start)
   addEventListener('pointerdown', initAudioOnce, {passive:true});
@@ -52,72 +51,7 @@
   const LAYER_ALIGN='bottom';
   let cameraX=0;
 
-  // --- Alignement sol depuis le visuel "ground"
-  // GROUND_SRC_OFFSET = distance (en pixels source) entre le bas de l’image ground et la LIGNE DE SOL.
-  // Ajustable en live avec [ et ] ; persistance via localStorage.
-  let GROUND_SRC_OFFSET = parseInt(localStorage.getItem('GROUND_SRC_OFFSET')||'18',10);
-  let GROUND_Y = 560; // recalculé après chargement du ground
-  function recalcGround(){
-    const W=canvas.width/DPR, H=canvas.height/DPR;
-    if(images.front){
-      const scale=(VIEW_DEN.front*W)/images.front.width;
-      const groundFromBottom=Math.round(GROUND_SRC_OFFSET*scale);
-      GROUND_Y = H - groundFromBottom;
-    }
-  }
-  // Raccourcis pour ajuster rapidement
-  addEventListener('keydown', (e)=>{
-    if(e.key===']'){ GROUND_SRC_OFFSET++; localStorage.setItem('GROUND_SRC_OFFSET', GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
-    if(e.key==='['){ GROUND_SRC_OFFSET--; localStorage.setItem('GROUND_SRC_OFFSET', GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
-  });
-
-  // ---------- Physique (saut fixe "wave") ----------
-  const MOVE_SPEED=360;
-  const MYO_H=120;
-
-  // Hauteur cible ~200px (tu avais demandé /3 vs 600)
-  const GRAVITY_UP   = 2600;
-  const GRAVITY_DOWN = 2600 * 2.2;
-  const TARGET_JUMP_HEIGHT = 200;
-  const JUMP_VELOCITY = Math.sqrt(2 * GRAVITY_UP * TARGET_JUMP_HEIGHT); // ~1020 px/s
-
-  // Double-saut STRICT: 1 saut au sol + 1 saut aérien max
-  const AIR_JUMPS = 1;  // <= ne JAMAIS changer pour ne pas retomber sur un triple
-  let airJumpsUsed = 0;
-
-  // Qualité de vie
-  const COYOTE_TIME = 0.10;  // tolérance après bord
-  const JUMP_BUFFER = 0.12;  // tampon d’appui
-  let coyote=0, jumpBuf=0;
-
-  // ---------- Input ----------
-  const keys=new Set();
-  addEventListener('keydown',e=>{
-    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s','[',']'].includes(e.key)) e.preventDefault();
-    keys.add(e.key);
-    if(e.key==='ArrowUp'||e.key==='w') jumpBuf = JUMP_BUFFER; // on enregistre l'intention
-  });
-  addEventListener('keyup',e=>keys.delete(e.key));
-
-  // ---------- Player (Myo only) ----------
-  const player={ x:0, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0 };
-
-  // ---------- Posters ----------
-  const POSTER_SIZE=46;                 // un poil + grand
-  const POSTER_Y_ABOVE_GROUND=150;      // un peu + haut
-  const COLLECT_RADIUS=56;              // zone large symétrique
-  const COLLECT_DUR=0.15, COLLECT_AMP=6;
-  const posters=[];
-  (function spawn(){
-    const segLen=5000, repeats=2;
-    const base=[600,1100,1500,2050,2450,2950,3350,3650,4250,4650];
-    for(let k=0;k<repeats;k++){
-      for(const x of base) posters.push({ x:x+k*segLen, y:0, w:POSTER_SIZE, h:POSTER_SIZE, taking:false, t:0, taken:false });
-    }
-  })();
-  let score=0;
-
-  // ---------- Assets (Myo noms uniques + cache-bust) ----------
+  // ---------- Assets (noms Myo uniques + cache-bust) ----------
   const CB='?cb='+Date.now();
   const ASSETS={
     back :'assets/background/bg_far.png'+CB,
@@ -146,16 +80,70 @@
     for(const s of ASSETS.myoIdle){ const i=await tryLoad(s); i?images.myoIdle.push(i):miss.push(s); }
     for(const s of ASSETS.myoWalk){ const i=await tryLoad(s); i?images.myoWalk.push(i):miss.push(s); }
     images.poster = await tryLoad(ASSETS.poster);
-
     if(miss.length) banner('Missing assets → '+miss.join(', '));
-
-    // recalcul sol depuis ground
     recalcGround();
-
-    // positionne posters
     const toWorldY=h=>GROUND_Y-h;
     for(const p of posters) p.y=toWorldY(POSTER_Y_ABOVE_GROUND);
   }
+
+  // ---------- Ground align (pieds = haut du ground visuel) ----------
+  let GROUND_SRC_OFFSET = parseInt(localStorage.getItem('GROUND_SRC_OFFSET')||'18',10);
+  let GROUND_Y = 560;
+  function recalcGround(){
+    const W=canvas.width/DPR, H=canvas.height/DPR;
+    if(images.front){
+      const scale=(VIEW_DEN.front*W)/images.front.width;
+      const groundFromBottom=Math.round(GROUND_SRC_OFFSET*scale);
+      GROUND_Y = H - groundFromBottom;
+    }
+  }
+  addEventListener('keydown', (e)=>{
+    if(e.key===']'){ GROUND_SRC_OFFSET++; localStorage.setItem('GROUND_SRC_OFFSET', GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
+    if(e.key==='['){ GROUND_SRC_OFFSET--; localStorage.setItem('GROUND_SRC_OFFSET', GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
+  });
+
+  // ---------- Physique (saut fixe "wave") ----------
+  const MOVE_SPEED=360;
+  const MYO_H=120;
+
+  const GRAVITY_UP   = 2600;
+  const GRAVITY_DOWN = 2600 * 2.2;
+  const TARGET_JUMP_HEIGHT = 200; // hauteur ~200px (réglée /3)
+  const JUMP_VELOCITY = Math.sqrt(2 * GRAVITY_UP * TARGET_JUMP_HEIGHT); // ~1020 px/s
+
+  const AIR_JUMPS = 1;  // 1 seul saut aérien
+  let airJumpsUsed = 0;
+
+  const COYOTE_TIME = 0.10;
+  const JUMP_BUFFER = 0.12;
+  let coyote=0, jumpBuf=0;
+
+  // ---------- Input ----------
+  const keys=new Set();
+  addEventListener('keydown',e=>{
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s','[',']'].includes(e.key)) e.preventDefault();
+    keys.add(e.key);
+    if(e.key==='ArrowUp'||e.key==='w') jumpBuf = JUMP_BUFFER;
+  });
+  addEventListener('keyup',e=>keys.delete(e.key));
+
+  // ---------- Player (Myo only) ----------
+  const player={ x:0, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0 };
+
+  // ---------- Posters ----------
+  const POSTER_SIZE=46;
+  const POSTER_Y_ABOVE_GROUND=150;
+  const COLLECT_RADIUS=56;
+  const COLLECT_DUR=0.15, COLLECT_AMP=6;
+  const posters=[];
+  (function spawn(){
+    const segLen=5000, repeats=2;
+    const base=[600,1100,1500,2050,2450,2950,3350,3650,4250,4650];
+    for(let k=0;k<repeats;k++){
+      for(const x of base) posters.push({ x:x+k*segLen, y:0, w:POSTER_SIZE, h:POSTER_SIZE, taking:false, t:0, taken:false });
+    }
+  })();
+  let score=0;
 
   // ---------- Render ----------
   function drawLayer(img,f,den){
@@ -203,12 +191,11 @@
     if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
     player.x = Math.max(0, player.x + vx*dt); // gauche bloquée, droite libre
 
-    // Timers QoL
-    if(player.onGround) { coyote = COYOTE_TIME; airJumpsUsed = 0; } // reset air jump au sol
-    else                { coyote = Math.max(0, coyote - dt); }
+    // QoL timers
+    if(player.onGround){ coyote = COYOTE_TIME; airJumpsUsed=0; } else coyote = Math.max(0, coyote - dt);
     jumpBuf = Math.max(0, jumpBuf - dt);
 
-    // Déclenchement saut (fixe) avec double-saut strict
+    // Saut fixe + double-saut strict
     const wantJump = jumpBuf > 0;
     if (wantJump) {
       if (player.onGround || coyote > 0) {
@@ -219,16 +206,13 @@
     }
 
     // Gravité "wave"
-    if (player.vy < 0) player.vy += GRAVITY_UP   * dt; // montée (vy négatif)
-    else               player.vy += GRAVITY_DOWN * dt; // descente (vy positif)
+    if (player.vy < 0) player.vy += GRAVITY_UP   * dt; // montée
+    else               player.vy += GRAVITY_DOWN * dt; // descente
 
-    // Vertical & sol
+    // Vertical & sol (pieds collés au ground)
     player.y += player.vy * dt;
-    if (GROUND_Y + player.y > GROUND_Y) { // touche la ligne sol
-      player.y=0; player.vy=0; player.onGround=true;
-    } else {
-      player.onGround=false;
-    }
+    if (GROUND_Y + player.y > GROUND_Y) { player.y=0; player.vy=0; player.onGround=true; }
+    else player.onGround=false;
 
     // Collecte (↓/S)
     const wantsCollect=keys.has('ArrowDown')||keys.has('s');
@@ -269,13 +253,12 @@
   }
 
   // ---------- Boot ----------
-  const images={ back:null, mid:null, front:null, myoIdle:[], myoWalk:[], poster:null };
   async function boot(){ await loadAll(); requestAnimationFrame(loop); }
 
   // Start
   startBtn.addEventListener('click', ()=>{
     gate.style.display='none';
-    initAudioOnce(); // lance vraiment la musique si pas déjà fait
+    initAudioOnce(); // (re)lance musique si besoin
     boot();
   }, { once:true });
 
