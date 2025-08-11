@@ -27,7 +27,7 @@ html,body{height:100%;margin:0;background:#000;color:var(--ui-fg);
   background:radial-gradient(1000px 600px at 50% 20%,rgba(255,255,255,.06),rgba(0,0,0,.9)),#000;
   z-index:3;
 }
-#gate .title{position:absolute;top:12%;left:50%;transform:translateX(-50%);height:220px}
+#gate .title{position:absolute;top:10%;left:50%;transform:translateX(-50%);height:min(48vh,300px)}
 #gate .title img{height:100%;image-rendering:pixelated}
 #gate #title2{position:absolute;left:0;top:0;opacity:0}
 #gate button{
