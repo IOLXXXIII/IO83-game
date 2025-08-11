@@ -1,5 +1,7 @@
-// IO83 – main.js (socle + dash + PNJ + buildings + intérieurs + posters)
-// Respecte ton arbo EXACTE. Code commenté pour modifier vite.
+// IO83 – main.js (patch 08/12)
+// Fix: audio titre (autoplay muet + fade-in sur 1re interaction), intérieurs retry,
+// PNJ & bâtiments ×2.5, dash double-tap sans auto-repeat, toits collidables,
+// intérieurs seulement sur building types 2 & 3, bulles 50% + plus haut, posters au sol.
 
 (function(){
   'use strict';
@@ -24,10 +26,10 @@
   const gate=document.getElementById('gate');
   const startBtn=document.getElementById('startBtn');
   const title1=document.getElementById('title1'), title2=document.getElementById('title2');
-  let titleT=0; function titleLoop(ts){ titleT+=0.016; const a=(Math.sin(titleT*1.4)+1)/2; title2.style.opacity=a*0.75; if(gate.style.display!=='none') requestAnimationFrame(titleLoop); }
+  let titleT=0; function titleLoop(){ titleT+=0.016; const a=(Math.sin(titleT*1.4)+1)/2; if(title2) title2.style.opacity=a*0.75; if(gate && gate.style.display!=='none') requestAnimationFrame(titleLoop); }
   requestAnimationFrame(titleLoop);
 
-  // ---------- Audio elements ----------
+  // ---------- Audio ----------
   const bgm=document.getElementById('bgm');
   const sfxWanted=document.getElementById('sfxWanted');
   const sfxDash=document.getElementById('sfxDash');
@@ -38,13 +40,18 @@
   const sfxDing =document.getElementById('sfxDing');
   const sfxFoot =document.getElementById('sfxFoot');
 
-  let audioArmed=false;
-  function armAudio(){
-    if(audioArmed) return; audioArmed=true;
-    for(const a of [bgm,sfxWanted,sfxDash,sfxEnter,sfxExit,sfxJump,sfxType,sfxDing,sfxFoot]) if(a) a.muted=false;
-    if(bgm){ bgm.volume=0.6; const p=bgm.play(); if(p && p.catch) p.catch(()=>{/*blocked until interaction*/}); }
+  // Démarre la BGM en MUET dès l’arrivée (autorisé), on dé-mute au 1er geste.
+  if(bgm){ bgm.volume=0; bgm.muted=true; bgm.play().catch(()=>{}); }
+  let audioUnmuted=false;
+  function fadeIn(audio, target=0.6, ms=800){
+    const step=target/(ms/50); const id=setInterval(()=>{ audio.volume=Math.min(target, audio.volume+step); if(audio.volume>=target) clearInterval(id); },50);
   }
-  addEventListener('pointerdown',armAudio,{passive:true}); addEventListener('keydown',armAudio);
+  function unmuteOnce(){
+    if(audioUnmuted) return; audioUnmuted=true;
+    if(bgm){ bgm.muted=false; fadeIn(bgm,0.6,700); }
+  }
+  addEventListener('pointerdown', unmuteOnce, {passive:true});
+  addEventListener('keydown',     unmuteOnce);
 
   // ---------- Parallax ----------
   const PARALLAX={back:0.15, mid:0.45, front:1.0};
@@ -67,16 +74,15 @@
     // Posters
     posterWith:'assets/collectibles/wanted_withposter.png'+CB,
     posterWithout:'assets/collectibles/wanted_withoutposter.png'+CB,
-    // PNJ (idles)
+    // PNJ idles
     npcs:{
       aeron:     ['assets/characters/aeron/aeron_idle_1.png'+CB,'assets/characters/aeron/aeron_idle_2.png'+CB],
       kaito:     ['assets/characters/kaito/kaito_idle_1.png'+CB,'assets/characters/kaito/kaito_idle_2.png'+CB],
       maonis:    ['assets/characters/maonis/maonis_idle_1.png'+CB,'assets/characters/maonis/maonis_idle_2.png'+CB],
       kahikoans: ['assets/characters/kahikoans/kahikoans_idle_1.png'+CB,'assets/characters/kahikoans/kahikoans_idle_2.png'+CB]
     },
-    // Dialog bubble PNGs (listed in config/dialogs_manifest.json)
     dialogsManifest:'config/dialogs_manifest.json'+CB,
-    // Buildings
+    // Buildings (4 types)
     buildings:[
       ['assets/buildings/building_1_idle_1.png'+CB,'assets/buildings/building_1_idle_2.png'+CB],
       ['assets/buildings/building_2_idle_1.png'+CB,'assets/buildings/building_2_idle_2.png'+CB],
@@ -98,26 +104,39 @@
     posterWith:null, posterWithout:null,
     npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
     dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
-    buildings:[], // each: [img1,img2]
-    dashTrail:[],
+    buildings:[], dashTrail:[],
     interiorClosed:null, interiorOpens:[]
   };
 
-  function loadImg(src){ return new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; }); }
+  // Loader qui retente SANS ?cb en cas d’échec (fix GitHub caching)
+  function loadImgRetry(src){
+    return new Promise(res=>{
+      const i=new Image();
+      i.onload=()=>res(i);
+      i.onerror=()=>{
+        if(src.includes('?cb=')){
+          const plain=src.split('?')[0];
+          const j=new Image(); j.onload=()=>res(j); j.onerror=()=>res(null); j.src=plain;
+        }else res(null);
+      };
+      i.src=src;
+    });
+  }
+
   async function loadAll(){
     const miss=[];
-    images.back  = await loadImg(ASSETS.back)  || (miss.push(ASSETS.back),null);
-    images.mid   = await loadImg(ASSETS.mid)   || (miss.push(ASSETS.mid),null);
-    images.front = await loadImg(ASSETS.front) || (miss.push(ASSETS.front),null);
+    images.back  = await loadImgRetry(ASSETS.back)  || (miss.push(ASSETS.back),null);
+    images.mid   = await loadImgRetry(ASSETS.mid)   || (miss.push(ASSETS.mid),null);
+    images.front = await loadImgRetry(ASSETS.front) || (miss.push(ASSETS.front),null);
 
-    for(const s of ASSETS.myoIdle){ const i=await loadImg(s); i?images.myoIdle.push(i):miss.push(s); }
-    for(const s of ASSETS.myoWalk){ const i=await loadImg(s); i?images.myoWalk.push(i):miss.push(s); }
+    for(const s of ASSETS.myoIdle){ const i=await loadImgRetry(s); i?images.myoIdle.push(i):miss.push(s); }
+    for(const s of ASSETS.myoWalk){ const i=await loadImgRetry(s); i?images.myoWalk.push(i):miss.push(s); }
 
-    images.posterWith    = await loadImg(ASSETS.posterWith)    || (miss.push(ASSETS.posterWith),null);
-    images.posterWithout = await loadImg(ASSETS.posterWithout) || (miss.push(ASSETS.posterWithout),null);
+    images.posterWith    = await loadImgRetry(ASSETS.posterWith)    || (miss.push(ASSETS.posterWith),null);
+    images.posterWithout = await loadImgRetry(ASSETS.posterWithout) || (miss.push(ASSETS.posterWithout),null);
 
     for(const k of Object.keys(ASSETS.npcs)){
-      for(const s of ASSETS.npcs[k]){ const i=await loadImg(s); i?images.npcs[k].push(i):miss.push(s); }
+      for(const s of ASSETS.npcs[k]){ const i=await loadImgRetry(s); i?images.npcs[k].push(i):miss.push(s); }
     }
 
     // dialogs manifest
@@ -127,28 +146,29 @@
         const list = mf[k]||[];
         for(const name of list){
           const p = `assets/ui/dialogs/${k}/${name}${CB}`;
-          const i=await loadImg(p); if(i) images.dialogs[k].push(i); else miss.push(p);
+          const i=await loadImgRetry(p); if(i) images.dialogs[k].push(i); else miss.push(p);
         }
       }
     }catch(e){ banner('dialogs_manifest.json introuvable ou invalide'); }
 
-    // buildings (2 frames)
-    for(const pair of ASSETS.buildings){
-      const a=await loadImg(pair[0]); const b=await loadImg(pair[1]);
-      images.buildings.push([a,b||a]);
-      if(!a) miss.push(pair[0]);
+    // buildings
+    for(let idx=0; idx<ASSETS.buildings.length; idx++){
+      const [aS,bS]=ASSETS.buildings[idx];
+      const a=await loadImgRetry(aS); const b=await loadImgRetry(bS);
+      images.buildings.push([a,b||a, idx+1]); // idx+1 = typeId 1..4
+      if(!a) miss.push(aS);
     }
 
-    for(const s of ASSETS.dashTrail){ const i=await loadImg(s); i?images.dashTrail.push(i):miss.push(s); }
+    for(const s of ASSETS.dashTrail){ const i=await loadImgRetry(s); i?images.dashTrail.push(i):miss.push(s); }
 
-    images.interiorClosed = await loadImg(ASSETS.interiorClosed) || (miss.push(ASSETS.interiorClosed),null);
-    for(const s of ASSETS.interiorOpens){ const i=await loadImg(s); i?images.interiorOpens.push(i):miss.push(s); }
+    images.interiorClosed = await loadImgRetry(ASSETS.interiorClosed) || (miss.push(ASSETS.interiorClosed),null);
+    for(const s of ASSETS.interiorOpens){ const i=await loadImgRetry(s); i?images.interiorOpens.push(i):miss.push(s); }
 
     if(miss.length) banner('Missing assets → '+miss.join(', '));
 
     recalcGround();
     const toWorldY=h=>GROUND_Y-h;
-    for(const p of posters) p.y=toWorldY(POSTER_Y_ABOVE_GROUND);
+    for(const p of posters) p.y=toWorldY(POSTER_SIZE); // poster au sol (haut = ground - size)
 
     spawnVillages();
     spawnNPCsOnce();
@@ -190,10 +210,12 @@
   const keys=new Set();
   addEventListener('keydown',e=>{
     if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s','[',']'].includes(e.key)) e.preventDefault();
+    // ignore auto-repeat pour éviter dash auto
+    if(e.repeat) { keys.add(e.key); return; }
     keys.add(e.key);
     if(e.key==='ArrowUp'||e.key==='w') jumpBuf = JUMP_BUFFER;
 
-    // double tap detection
+    // double tap detection (sans repeat)
     const t=performance.now()/1000;
     if(e.key==='ArrowRight'||e.key==='d'){
       if(t-lastTapR<=DASH_WINDOW) tryDash('right');
@@ -212,8 +234,7 @@
   let score=0;
 
   // Posters
-  const POSTER_SIZE=50;
-  const POSTER_Y_ABOVE_GROUND=160;
+  const POSTER_SIZE=50;                  // (touchent le sol)
   const COLLECT_RADIUS=60;
   const COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[]; // {x,y,w,h,taking,t,taken}
@@ -225,11 +246,11 @@
     }
   })();
 
-  // Buildings & roofs
-  const BUILDING_TARGET_H=180;
+  // Buildings & roofs (×2.5)
+  const BUILDING_TARGET_H=450; // 180 * 2.5
   const VILLAGE_MIN=2, VILLAGE_MAX=3;
   const VILLAGE_GAP_MIN=300, VILLAGE_GAP_MAX=800;
-  const buildings=[]; // {id,frames:[i1,i2],animT,x,y,dw,dh,doorX,doorW,roof:{x,y,w,h}}
+  const buildings=[]; // {id,typeId,canEnter,frames:[i1,i2],animT,x,y,dw,dh,doorX,doorW,roof:{x,y,w,h}}
   let nextBuildingId=1;
   function spawnVillages(){
     buildings.length=0;
@@ -238,23 +259,27 @@
     while(x<endX){
       const count=(Math.random()<0.65)? randInt(VILLAGE_MIN,VILLAGE_MAX):1;
       for(let i=0;i<count;i++){
-        const pair = images.buildings[randInt(0, images.buildings.length-1)];
-        if(!pair || !pair[0]) continue;
+        const pick = randInt(0, images.buildings.length-1);
+        const pair = images.buildings[pick]; if(!pair || !pair[0]) continue;
+        const typeId = pair[2]; // 1..4
+        const canEnter = (typeId===2 || typeId===3); // seuls 2 & 3 ont un intérieur
         const img=pair[0];
         const s=BUILDING_TARGET_H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
         const bx=x, by=GROUND_Y-dh;
         const doorW=120, doorX=bx + Math.round(dw/2 - doorW/2);
         // toit rectangle: 80% centré, épaisseur 8px
         const roofW=Math.round(dw*0.8), roofX=bx + Math.round((dw-roofW)/2), roofY=by+8;
-        buildings.push({ id: nextBuildingId++, frames:pair, animT:0, x:bx, y:by, dw, dh, doorX, doorW, roof:{x:roofX,y:roofY,w:roofW,h:8} });
+        buildings.push({ id: nextBuildingId++, typeId, canEnter, frames:[pair[0],pair[1]||pair[0]], animT:0,
+          x:bx, y:by, dw, dh, doorX, doorW, roof:{x:roofX,y:roofY,w:roofW,h:8} });
         x += dw + randInt(10,40);
       }
       x += randInt(VILLAGE_GAP_MIN, VILLAGE_GAP_MAX);
     }
   }
 
-  // NPCs
-  const NPC_H=120, NPC_TALK_RADIUS=140, NPC_HIDE_DELAY=1.0;
+  // NPCs (×2.5)
+  const NPC_H=300; // 120 * 2.5
+  const NPC_TALK_RADIUS=140, NPC_HIDE_DELAY=1.0;
   const npcs=[]; // {type,x,y,frames[],animT,face,show,hideT,dialogImg}
   function spawnNPCsOnce(){
     npcs.length=0;
@@ -278,11 +303,11 @@
   let mode='world'; // 'world' | 'interior'
   const INTERIOR_FLOOR_Y=620, INTERIOR_CEIL_Y=120;
   const TERMINAL_ZONE={x:980,w:160};
-  let currentBuilding=null; // ref building
+  let currentBuilding=null;
   let eggIndex=parseInt(localStorage.getItem('io83_egg_index')||'0',10); // 0..10
-  const hackedOnce=new Set(); // building.id that already incremented
+  const hackedOnce=new Set(); // building.id déjà incrémenté
 
-  // Footsteps control
+  // Footsteps
   let footArmed=false;
   function playFootsteps(){
     if(!sfxFoot) return;
@@ -321,14 +346,9 @@
       const tIdx = Math.floor(player.animTime*9)%images.dashTrail.length;
       const ti = images.dashTrail[tIdx];
       ctx.save();
-      if(player.facing==='left'){ // miroir aussi pour la trail
-        ctx.translate(x+dw/2-16, y); ctx.scale(-1,1); ctx.translate(-dw/2,0);
-      } else {
-        ctx.translate(x-16, y);
-      }
-      ctx.globalAlpha=0.85;
-      ctx.drawImage(ti, 0, 0, dw, dh);
-      ctx.restore();
+      if(player.facing==='left'){ ctx.translate(x+dw/2-16, y); ctx.scale(-1,1); ctx.translate(-dw/2,0); }
+      else ctx.translate(x-16, y);
+      ctx.globalAlpha=0.85; ctx.drawImage(ti, 0, 0, dw, dh); ctx.restore();
     }
 
     ctx.save();
@@ -365,20 +385,23 @@
       else ctx.drawImage(img,sx,sy,dw,dh);
       ctx.restore();
 
+      // bulle 50% et un peu plus haut
       if(n.show && n.dialogImg){
-        const bx = sx + Math.round(dw/2 - n.dialogImg.width/2);
-        const by = sy - n.dialogImg.height - 8;
-        ctx.drawImage(n.dialogImg, bx, by);
+        const scale=0.5;
+        const bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
+        const bx = sx + Math.round(dw/2 - bw/2);
+        const by = sy - bh - 20;
+        ctx.drawImage(n.dialogImg, bx, by, bw, bh);
       }
     }
   }
 
-  // ---------- World/Interior loops ----------
+  // ---------- Game states ----------
   let last=0; const MAX_DT=1/30;
 
   function tryDash(dir){
     if(dashCooldown>0) return;
-    if(!player.onGround && airDashUsed) return; // 1 dash aérien max
+    if(!player.onGround && airDashUsed) return; // 1 dash aérien
     dashTimer=DASH_DUR; dashCooldown=DASH_COOLDOWN;
     player.facing=dir;
     if(!player.onGround) airDashUsed=true;
@@ -386,7 +409,7 @@
   }
 
   function updateWorld(dt){
-    // Horizontal (ignore input si dash actif → vitesse forcée)
+    // Horizontal
     let vx=0;
     if(dashTimer>0){
       vx = (player.facing==='right'?1:-1)*MOVE_SPEED*DASH_MULT;
@@ -397,7 +420,7 @@
     }
     player.x = Math.max(0, player.x + vx*dt);
 
-    // SFX footsteps
+    // Footsteps
     if(player.onGround && Math.abs(vx)>1) playFootsteps(); else stopFootsteps();
 
     // Timers
@@ -421,21 +444,19 @@
     }
 
     // Vertical & sol
-    player.y += player.vy*dt;
+    player.y += player.vy * dt;
     if (GROUND_Y + player.y > GROUND_Y) { player.y=0; player.vy=0; player.onGround=true; }
     else player.onGround=false;
 
-    // Toits (plates-formes)
+    // Toits : one-way simple (snap si on descend près du top)
     for(const b of buildings){
-      // feet position
-      const sX = player.x;
       const feetY = GROUND_Y + player.y;
       const top = b.roof.y;
-      if (sX > b.roof.x && sX < b.roof.x + b.roof.w) {
-        // si on descend et qu'on traverse le top → on se pose
-        if (player.vy >= 0 && feetY <= top && feetY + player.vy*dt >= top) {
-          player.y += (top - feetY); // colle aux toits
-          player.vy = 0; player.onGround = true;
+      const withinX = (player.x > b.roof.x && player.x < b.roof.x + b.roof.w);
+      if(withinX && player.vy >= 0){
+        const diff = top - feetY; // >0 : toit au-dessus des pieds
+        if(diff >= -12 && diff <= 8){ // fenêtre de capture
+          player.y += diff; player.vy=0; player.onGround=true;
         }
       }
     }
@@ -459,9 +480,10 @@
       }
     }
 
-    // Entrée bâtiment (↓)
+    // Entrée bâtiment (↓) — seulement types 2 & 3
     if(wantsCollect){
       for(const b of buildings){
+        if(!b.canEnter) continue;
         if(player.x > b.doorX && player.x < b.doorX + b.doorW && Math.abs((GROUND_Y+player.y) - (b.y+b.dh))<120){
           enterInterior(b);
           break;
@@ -476,10 +498,9 @@
     player.state = Math.abs(vx)>1e-2 ? 'walk' : 'idle';
     player.animTime += dt;
 
-    // NPCs update
+    // NPCs
     for(const n of npcs){
       n.animT += dt;
-      // face Myo
       n.face = (player.x < n.x) ? 'left' : 'right';
       const dist = Math.abs(player.x - n.x);
       if(dist<=NPC_TALK_RADIUS){
@@ -497,27 +518,22 @@
     if(images.mid)   drawLayer(images.mid,   PARALLAX.mid,   VIEW_DEN.mid);
     if(images.front) drawLayer(images.front, PARALLAX.front, VIEW_DEN.front);
     for(const b of buildings) b.animT += dt;
-    drawBuildings();
-    drawPosters();
-    drawNPCs();
-    drawMyo(Math.abs(keys.has('ArrowLeft')||keys.has('a')?-MOVE_SPEED:(keys.has('ArrowRight')||keys.has('d')?MOVE_SPEED:0)));
+    drawBuildings(); drawPosters(); drawNPCs(); drawMyo(Math.abs(keys.has('ArrowLeft')||keys.has('a')?-MOVE_SPEED:(keys.has('ArrowRight')||keys.has('d')?MOVE_SPEED:0)));
   }
 
   // ---------- Interior ----------
-  let interiorImg=null, interiorOpenIdx=0, hacking=false, hackT=0;
+  let interiorOpenIdx=0, hacking=false, hackT=0, currentBuilding=null;
   function enterInterior(building){
     mode='interior'; currentBuilding=building; cameraX=0;
     if(bgm) bgm.pause();
     if(sfxEnter){ sfxEnter.currentTime=0; sfxEnter.play().catch(()=>{}); }
-    interiorImg=images.interiorClosed; interiorOpenIdx=0; hacking=false; hackT=0;
-    // place Myo à gauche
+    interiorOpenIdx=0; hacking=false; hackT=0;
     player.x=60; player.y=0; player.vy=0; player.onGround=true; player.facing='right';
   }
   function exitInterior(){
     mode='world';
     if(bgm) bgm.play().catch(()=>{});
     if(sfxExit){ sfxExit.currentTime=0; sfxExit.play().catch(()=>{}); }
-    // replace Myo devant la porte
     if(currentBuilding){
       player.x = currentBuilding.doorX + currentBuilding.doorW/2;
       player.y = 0; player.vy=0; player.onGround=true;
@@ -526,38 +542,33 @@
   }
 
   function updateInterior(dt){
-    // mouvement latéral uniquement
+    // horizontal
     let vx=0;
     if(keys.has('ArrowRight')||keys.has('d')){ vx+=MOVE_SPEED; player.facing='right'; }
     if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
-    player.x = Math.max(0, Math.min(1220, player.x + vx*dt)); // murs gauche/droite soft
+    player.x = Math.max(0, Math.min(1220, player.x + vx*dt));
+
     // sol + plafond
     const floorY=INTERIOR_FLOOR_Y, ceilY=INTERIOR_CEIL_Y;
-    const MYO_PIX=MYO_H; // hauteur visuelle
-    // gravité simple
     if(!player.onGround){ player.vy += GRAVITY_DOWN*dt; }
     player.y += player.vy*dt;
-    if(floorY + player.y > floorY){ player.y=0; player.vy=0; player.onGround=true; }
-    else player.onGround=false;
-    // plafond
-    const headY = floorY - MYO_PIX + player.y;
-    if(headY < ceilY){ player.y += (ceilY - headY); player.vy=0; }
+    if(floorY + player.y > floorY){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
+    const headY = floorY - MYO_H + player.y; if(headY < ceilY){ player.y += (ceilY - headY); player.vy=0; }
 
     // sortie auto à gauche
     if(player.x<=0 && !hacking){ exitInterior(); return; }
 
-    // action ordi (↓) si dans zone
+    // action ordi (↓)
     const wantsCollect=keys.has('ArrowDown')||keys.has('s');
     if(!hacking && wantsCollect && player.x > TERMINAL_ZONE.x && player.x < TERMINAL_ZONE.x+TERMINAL_ZONE.w){
-      hacking=true; hackT=0;
-      if(sfxType){ sfxType.currentTime=0; sfxType.play().catch(()=>{}); }
+      hacking=true; hackT=0; if(sfxType){ sfxType.currentTime=0; sfxType.play().catch(()=>{}); }
     }
     if(hacking){
       hackT += dt;
       if(hackT>=1.5){
         hacking=false; hackT=0;
         if(sfxDing){ sfxDing.currentTime=0; sfxDing.play().catch(()=>{}); }
-        // incrémente egg index une seule fois par building
+        // progression 1→10 (1 par maison unique)
         if(currentBuilding && !hackedOnce.has(currentBuilding.id)){
           hackedOnce.add(currentBuilding.id);
           eggIndex = Math.min(10, eggIndex+1);
@@ -567,7 +578,7 @@
       }
     }
 
-    // anim + draw interior
+    // draw interior (fixe)
     player.state = Math.abs(vx)>1e-2 ? 'walk' : 'idle';
     player.animTime += dt;
 
@@ -576,7 +587,7 @@
     const base = interiorOpenIdx>0 ? images.interiorOpens[Math.min(9,interiorOpenIdx-1)] : images.interiorClosed;
     if(base) ctx.drawImage(base, 0, 0, Wpx, Hpx);
 
-    // dessine Myo (caméra fixe)
+    // Myo
     const frames=(Math.abs(vx)>1e-2?images.myoWalk:images.myoIdle);
     const fps=(Math.abs(vx)>1e-2?8:4);
     const idx=frames.length>1 ? Math.floor(player.animTime*fps)%frames.length : 0;
@@ -592,6 +603,7 @@
   }
 
   // ---------- Game loop ----------
+  let last=0; const MAX_DT=1/30;
   function loop(ts){
     const dt=Math.min((ts-last)/1000||0, MAX_DT); last=ts;
     if(mode==='world') updateWorld(dt);
@@ -602,10 +614,10 @@
   // ---------- Boot ----------
   async function boot(){ await loadAll(); requestAnimationFrame(loop); }
 
-  // Start gate
+  // Start
   startBtn.addEventListener('click', ()=>{
     gate.style.display='none';
-    armAudio(); // unmute + play
+    unmuteOnce(); // fade-in
     boot();
   }, { once:true });
 
