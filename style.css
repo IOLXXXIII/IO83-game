@@ -24,15 +24,15 @@ html,body{
 #scoreNum{ color:var(--ui-accent) }
 #hint{ opacity:.75 }
 
-/* Écran titre (plein écran) */
+/* Écran titre (vrai plein écran) */
 #gate{
   position:fixed; inset:0; display:grid; place-items:center;
-  background:#000;            /* pas de dégradé, plein contraste */
+  background:#000;
   z-index:3;
 }
 #gate .title{
   position:absolute; top:6%; left:50%; transform:translateX(-50%);
-  width:min(92vw, 92vh);      /* scale sur la largeur la plus grande possible */
+  width:min(92vw, 92vh);  /* prend la plus grande largeur possible */
   height:auto;
 }
 #gate .title img{
@@ -45,5 +45,3 @@ html,body{
   border:2px solid #444; border-radius:12px;
   font-weight:800; letter-spacing:.6px; cursor:pointer; margin-top:18px;
 }
-/* Pas de phrase en bas de l'écran titre */
-#gate p{ display:none }
