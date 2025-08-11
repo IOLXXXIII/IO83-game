@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>IO 83 – Myo Prototype</title>
 
-  <!-- PRELOADS (noms uniques pour Myo) -->
+  <!-- PRELOADS essentiels -->
   <link rel="preload" as="image" href="assets/background/bg_far.png">
   <link rel="preload" as="image" href="assets/background/bg_mid.png">
   <link rel="preload" as="image" href="assets/background/ground.png">
@@ -15,27 +15,40 @@
   <link rel="preload" as="image" href="assets/characters/myo/myo_walk_2.png">
   <link rel="preload" as="image" href="assets/characters/myo/myo_walk_3.png">
   <link rel="preload" as="image" href="assets/characters/myo/myo_walk_4.png">
-  <link rel="preload" as="image" href="assets/collectibles/wanted.png">
+  <link rel="preload" as="image" href="assets/collectibles/wanted_withposter.png">
+  <link rel="preload" as="image" href="assets/collectibles/wanted_withoutposter.png">
 
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="hud">
     <div id="score">Wanted: <span id="scoreNum">0</span></div>
-    <div id="hint">← → to move · ↑ to jump · ⬇ to collect posters</div>
+    <div id="hint">← → move · ↑ jump (×2) · ↔↔ dash · ⬇ interact</div>
   </div>
 
-  <div id="gate">
+  <!-- Écran titre (BGM prêt dès 1re interaction) -->
+  <div id="gate" aria-modal="true" role="dialog">
+    <div class="title">
+      <img id="title1" src="assets/title/title_idle_1.png" alt="IO83 title" />
+      <img id="title2" src="assets/title/title_idle_2.png" alt="" />
+    </div>
     <button id="startBtn" aria-label="Start game">Start</button>
-    <p>Click to begin · Audio will start</p>
+    <p>Click or press any key · Audio will start</p>
   </div>
 
-  <!-- 16:9 canvas -->
+  <!-- Canvas 16:9 -->
   <canvas id="game" width="1280" height="720" aria-label="IO83 Side Scroller"></canvas>
 
   <!-- AUDIO -->
   <audio id="bgm" src="assets/audio/bgm_iogame.mp3" preload="auto" loop></audio>
-  <audio id="sfxWanted" src="assets/audio/sfx_wanted.mp3" preload="auto"></audio>
+  <audio id="sfxWanted"   src="assets/audio/sfx_wanted.mp3" preload="auto"></audio>
+  <audio id="sfxDash"     src="assets/audio/sfx_dash.mp3" preload="auto"></audio>
+  <audio id="sfxEnter"    src="assets/audio/sfx_enter.mp3" preload="auto"></audio>
+  <audio id="sfxExit"     src="assets/audio/sfx_exit.mp3" preload="auto"></audio>
+  <audio id="sfxJump"     src="assets/audio/sfx_jump.mp3" preload="auto"></audio>
+  <audio id="sfxType"     src="assets/audio/sfx_terminal_type.mp3" preload="auto"></audio>
+  <audio id="sfxDing"     src="assets/audio/sfx_terminal_ding.mp3" preload="auto"></audio>
+  <audio id="sfxFoot"     src="assets/audio/sfx_footsteps_loop.mp3" preload="auto" loop></audio>
 
   <script src="main.js"></script>
 </body>
