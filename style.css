@@ -24,24 +24,22 @@ html,body{
 #scoreNum{ color:var(--ui-accent) }
 #hint{ opacity:.75 }
 
-/* Écran titre (vrai plein écran) */
+/* Écran titre – VRAI plein écran */
 #gate{
-  position:fixed; inset:0; display:grid; place-items:center;
-  background:#000;
-  z-index:3;
+  position:fixed; inset:0; background:#000; z-index:3;
 }
 #gate .title{
-  position:absolute; top:6%; left:50%; transform:translateX(-50%);
-  width:min(92vw, 92vh);  /* prend la plus grande largeur possible */
-  height:auto;
+  position:absolute; inset:0; display:grid; place-items:center;   /* prend 100% de l'écran */
 }
 #gate .title img{
-  width:100%; height:auto; image-rendering:pixelated; display:block;
+  max-width:92vw; max-height:92vh; width:auto; height:auto;       /* rempli l'écran sans déformer */
+  image-rendering:pixelated; display:block;
 }
-#gate #title2{ position:absolute; left:0; top:0; opacity:0 }
-
+/* img2 superposée pour le "idle" */
+#gate #title2{ position:absolute; inset:auto; opacity:0 }
 #gate button{
+  position:absolute; bottom:8vh; left:50%; transform:translateX(-50%);
   padding:14px 28px; background:#1b1b1b; color:#fff;
   border:2px solid #444; border-radius:12px;
-  font-weight:800; letter-spacing:.6px; cursor:pointer; margin-top:18px;
+  font-weight:800; letter-spacing:.6px; cursor:pointer;
 }
