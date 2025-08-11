@@ -1,9 +1,9 @@
-// IO83 – main.js (titre plein écran + auto-boot + audio safe + retry interiors)
+// IO83 – main.js (patch: titre plein écran, intérieurs OK, toits/PNJ/dash fix)
 
 (function(){
   'use strict';
 
-  // ---------- Banner debug ----------
+  // ---------- Banner erreurs ----------
   function banner(msg, color='#b00020'){
     const d=document.createElement('div'); d.textContent=msg;
     Object.assign(d.style,{position:'fixed',top:'0',left:'0',right:'0',padding:'8px 12px',
@@ -23,8 +23,7 @@
   const gate=document.getElementById('gate');
   const startBtn=document.getElementById('startBtn');
   const title2=document.getElementById('title2');
-  let titleT=0; function titleLoop(){ titleT+=0.016; const a=(Math.sin(titleT*1.4)+1)/2; if(title2) title2.style.opacity=a*0.75; if(gate && gate.style.display!=='none') requestAnimationFrame(titleLoop); }
-  requestAnimationFrame(titleLoop);
+  let tTitle=0; (function loopTitle(){ tTitle+=0.016; if(title2){ const a=(Math.sin(tTitle*1.4)+1)/2; title2.style.opacity=(a*0.75).toFixed(3); } if(gate && gate.style.display!=='none') requestAnimationFrame(loopTitle); })();
 
   // ---------- Audio ----------
   const bgm=document.getElementById('bgm');
@@ -81,9 +80,7 @@
       ['assets/buildings/building_3_idle_1.png'+CB,'assets/buildings/building_3_idle_2.png'+CB],
       ['assets/buildings/building_4_idle_1.png'+CB,'assets/buildings/building_4_idle_2.png'+CB]
     ],
-    dashTrail:[
-      'assets/fx/dash_trail_1.png'+CB,'assets/fx/dash_trail_2.png'+CB,'assets/fx/dash_trail_3.png'+CB
-    ],
+    dashTrail:[ 'assets/fx/dash_trail_1.png'+CB,'assets/fx/dash_trail_2.png'+CB,'assets/fx/dash_trail_3.png'+CB ],
     interiorClosed:'assets/interiors/interior_closed.png'+CB,
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`)
   };
@@ -153,8 +150,7 @@
     if(miss.length) banner('Missing assets → '+miss.join(', '));
 
     recalcGround();
-    // posters: posés au sol (haut du sprite = ground - size)
-    for(const p of posters) p.y = GROUND_Y - POSTER_SIZE;
+    for(const p of posters) p.y = GROUND_Y - POSTER_SIZE; // posters posés au sol
 
     spawnVillages(); spawnNPCsOnce();
   }
@@ -171,12 +167,13 @@
     }
   }
   addEventListener('keydown', (e)=>{
-    if(e.key===']'){ GROUND_SRC_OFFSET++; localStorage.setItem('GROUND_SRC_OFFSET',GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
-    if(e.key==='['){ GROUND_SRC_OFFSET--; localStorage.setItem('GROUND_SRC_OFFSET',GROUND_SRC_OFFSET); recalcGround(); banner('GROUND_SRC_OFFSET = '+GROUND_SRC_OFFSET, '#1f4f7a'); }
+    if(e.key===']'){ GROUND_SRC_OFFSET++; localStorage.setItem('GROUND_SRC_OFFSET',GROUND_SRC_OFFSET); recalcGround(); }
+    if(e.key==='['){ GROUND_SRC_OFFSET--; localStorage.setItem('GROUND_SRC_OFFSET',GROUND_SRC_OFFSET); recalcGround(); }
   });
 
   // ---------- Physique & états ----------
-  const MOVE_SPEED=360, MYO_H=120;
+  const MOVE_SPEED=360, MYO_H=120, PLAYER_HALF_W=22;
+
   const GRAVITY_UP=2600, GRAVITY_DOWN=2600*2.2;
   const TARGET_JUMP_HEIGHT=200;
   const JUMP_VELOCITY=Math.sqrt(2*GRAVITY_UP*TARGET_JUMP_HEIGHT);
@@ -184,9 +181,9 @@
   const AIR_JUMPS=1; let airJumpsUsed=0;
   const COYOTE_TIME=0.10, JUMP_BUFFER=0.12; let coyote=0, jumpBuf=0;
 
-  // Dash (double tap)
+  // Dash (double tap) — 2e dash autorisé si le double-saut a été utilisé
   const DASH_WINDOW=0.22, DASH_DUR=0.18, DASH_COOLDOWN=0.8, DASH_MULT=4;
-  let lastTapL=-999, lastTapR=-999, dashTimer=0, dashCooldown=0, airDashUsed=false;
+  let lastTapL=-999, lastTapR=-999, dashTimer=0, dashCooldown=0, airDashUsed=0;
 
   // Input
   const keys=new Set();
@@ -204,9 +201,9 @@
   const player={ x:0, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0 };
   const scoreEl=document.getElementById('scoreNum'); let score=0;
 
-  // Posters
-  const POSTER_SIZE=50;
-  const COLLECT_RADIUS=60, COLLECT_DUR=0.15, COLLECT_AMP=6;
+  // Posters (×2 taille)
+  const POSTER_SIZE=100;
+  const COLLECT_RADIUS=70, COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[];
   (function spawnPosters(){
     const seg=5000, rep=2;
@@ -237,20 +234,32 @@
     }
   }
 
-  // NPCs (×2.5)
+  // NPCs (×2.5) + anti-chevauchement + posé au sol
   const NPC_H=300, NPC_TALK_RADIUS=140, NPC_HIDE_DELAY=1.0;
   const npcs=[];
+  function xIsFreeForNPC(x){
+    // marge contre bâtiments et autres PNJ
+    for(const b of buildings){
+      if(x > b.x-140 && x < b.x + b.dw + 140) return false;
+    }
+    for(const n of npcs){
+      if(Math.abs(n.x - x) < 280) return false;
+    }
+    return true;
+  }
   function spawnNPCsOnce(){
     npcs.length=0;
     const slots=[1400,2600,3800,5200,6500,7800,9000];
     for(const t of ['aeron','kaito','maonis','kahikoans']){
-      let x=slots[randInt(0,slots.length-1)];
+      let x=slots[randInt(0,slots.length-1)], tries=50;
+      while(tries-- && !xIsFreeForNPC(x)) x += randInt(-300,300);
       const frames=images.npcs[t]; if(!frames||frames.length===0) continue;
-      npcs.push({type:t,x,y:GROUND_Y-NPC_H,frames,animT:0,face:'right',show:false,hideT:0,dialogImg:null});
+      npcs.push({type:t,x,y:0,frames,animT:0,face:'right',show:false,hideT:0,dialogImg:null});
     }
   }
 
-  function pickDialog(pnj){ const list=images.dialogs[pnj]||[]; return list.length? list[(Math.random()*list.length)|0] : null; }
+  // dialogs
+  function pickDialog(k){ const list=images.dialogs[k]||[]; return list.length? list[(Math.random()*list.length)|0] : null; }
 
   // Interiors
   let mode='world', interiorOpenIdx=0, hacking=false, hackT=0, currentBuilding=null;
@@ -265,7 +274,7 @@
   function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
   function aabb(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
 
-  // Render helpers
+  // Render layers
   function drawLayer(img,f,den){
     const W=canvas.width/DPR, H=canvas.height/DPR;
     const s=(den*W)/img.width, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
@@ -279,7 +288,6 @@
     const img=frames[idx] || images.myoIdle[0]; if(!img) return;
     const s=MYO_H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
     const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y;
-    // dash trail
     if(dashTimer>0 && images.dashTrail.length){
       const tIdx = Math.floor(player.animTime*9)%images.dashTrail.length;
       const ti = images.dashTrail[tIdx];
@@ -295,7 +303,7 @@
   }
   function drawPosters(){
     for(const p of posters){
-      const sx=p.x - cameraX; if(sx<-160 || sx>canvas.width/DPR+160) continue;
+      const sx=p.x - cameraX; if(sx<-600 || sx>canvas.width/DPR+600) continue;
       let sy=p.y; if(p.taking){ const k=Math.min(1,p.t/COLLECT_DUR); sy -= Math.sin(k*Math.PI)*COLLECT_AMP; }
       const sprite=p.taken ? images.posterWithout : images.posterWith;
       if(sprite) ctx.drawImage(sprite, Math.round(sx), Math.round(sy), POSTER_SIZE, POSTER_SIZE);
@@ -303,24 +311,35 @@
   }
   function drawBuildings(){
     for(const b of buildings){
-      const sx=Math.floor(b.x - cameraX); if(sx<-300 || sx>canvas.width/DPR+300) continue;
+      const sx=Math.floor(b.x - cameraX); if(sx<-800 || sx>canvas.width/DPR+800) continue; // marge + large
       const frame = (Math.floor(b.animT*2)%2===0)? b.frames[0]: (b.frames[1]||b.frames[0]);
       if(frame) ctx.drawImage(frame, sx, b.y, b.dw, b.dh);
     }
   }
   function drawNPCs(){
     for(const n of npcs){
-      const idx=(n.frames.length>1)?(Math.floor(n.animT*2)%2):0;
-      const img=n.frames[idx]||n.frames[0]; if(!img) continue;
-      const s=NPC_H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
-      const sx=Math.floor(n.x - cameraX), sy=GROUND_Y - dh;
+      // aligner au sol
+      const img0=n.frames[0]; if(!img0) continue;
+      const s = NPC_H / img0.height;
+      const dw=Math.round(img0.width*s), dh=Math.round(img0.height*s);
+      const sx=Math.floor(n.x - cameraX), sy=GROUND_Y - dh + 2; // +2 pour "posé"
+      // flip avec hystérésis (ne tourne pas trop tôt)
+      if(player.x < n.x - 12) n.face='left';
+      else if(player.x > n.x + 12) n.face='right';
+
+      const idx=(Math.floor(n.animT*2)%2);
+      const img=n.frames[Math.min(idx, n.frames.length-1)]||n.frames[0];
+
       ctx.save();
       if(n.face==='left'){ ctx.translate(sx+dw/2,sy); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img,0,0,dw,dh); }
       else ctx.drawImage(img,sx,sy,dw,dh);
       ctx.restore();
+
       if(n.show && n.dialogImg){
-        const scale=0.5, bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
-        const bx=sx+Math.round(dw/2 - bw/2), by=sy - bh - 20;
+        const scale=0.6;                              /* +20% */
+        const bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
+        const bx = sx + Math.round(dw/2 - bw/2);
+        const by = sy - bh - 26;                      /* un peu plus haut */
         ctx.drawImage(n.dialogImg, bx, by, bw, bh);
       }
     }
@@ -329,15 +348,20 @@
   // Dash
   function tryDash(dir){
     if(dashCooldown>0) return;
-    if(!player.onGround && airDashUsed) return;
+    // quota dashes aériens: 1 + (si double-saut utilisé → +1)
+    if(!player.onGround){
+      const maxDashes = 1 + (airJumpsUsed > 0 ? 1 : 0);
+      if(airDashUsed >= maxDashes) return;
+      airDashUsed++;
+    }else{
+      airDashUsed = 0;
+    }
     dashTimer=DASH_DUR; dashCooldown=DASH_COOLDOWN; player.facing=dir;
-    if(!player.onGround) airDashUsed=true;
     if(sfxDash){ sfxDash.currentTime=0; sfxDash.play().catch(()=>{}); }
   }
 
-  // Loops
+  // Boucle monde
   let last=0; const MAX_DT=1/30;
-
   function updateWorld(dt){
     let vx=0;
     if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*MOVE_SPEED*DASH_MULT; dashTimer-=dt; }
@@ -349,7 +373,7 @@
 
     if(player.onGround && Math.abs(vx)>1) playFootsteps(); else stopFootsteps();
 
-    if(player.onGround){ coyote=COYOTE_TIME; airJumpsUsed=0; airDashUsed=false; } else coyote=Math.max(0,coyote-dt);
+    if(player.onGround){ coyote=COYOTE_TIME; airJumpsUsed=0; airDashUsed=0; } else coyote=Math.max(0,coyote-dt);
     jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
 
     const wantJump=jumpBuf>0;
@@ -359,29 +383,33 @@
     }
 
     if(dashTimer<=0){ if(player.vy<0) player.vy+=GRAVITY_UP*dt; else player.vy+=GRAVITY_DOWN*dt; } else { player.vy=0; }
-
     player.y += player.vy*dt;
+
+    // Sol
     if(GROUND_Y + player.y > GROUND_Y){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
 
-    // toits one-way
+    // Toits one-way (fenêtre plus large + largeur joueur)
     for(const b of buildings){
-      const feetY=GROUND_Y + player.y, top=b.roof.y;
-      const withinX = (player.x > b.roof.x && player.x < b.roof.x + b.roof.w);
-      if(withinX && player.vy>=0 && feetY>=top-18 && feetY<=top+10){ player.y += (top - feetY); player.vy=0; player.onGround=true; }
+      const feetY = GROUND_Y + player.y;
+      const top = b.roof.y;
+      const withinX = (player.x + PLAYER_HALF_W > b.roof.x) && (player.x - PLAYER_HALF_W < b.roof.x + b.roof.w);
+      if(withinX && player.vy>=0 && feetY>=top-26 && feetY<=top+12){
+        player.y += (top - feetY); player.vy=0; player.onGround=true;
+      }
     }
 
-    // posters (↓/S)
+    // Posters (↓/S)
     const wantsCollect=keys.has('ArrowDown')||keys.has('s');
     const feetY=GROUND_Y-110+player.y;
     for(const p of posters){
       const center=p.x + p.w/2;
       const dx=Math.abs(player.x - center);
       const overY=aabb(player.x-22, feetY, 44,110, p.x,p.y,p.w,p.h);
-      if(!p.taken && !p.taking && dx<=60 && overY && wantsCollect){ p.taking=true; p.t=0; }
-      if(p.taking){ p.t+=dt; if(p.t>=0.15){ p.taking=false; p.taken=true; score++; scoreEl.textContent=String(score); if(sfxWanted){sfxWanted.currentTime=0; sfxWanted.play().catch(()=>{});} } }
+      if(!p.taken && !p.taking && dx<=COLLECT_RADIUS && overY && wantsCollect){ p.taking=true; p.t=0; }
+      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; score++; scoreEl.textContent=String(score); if(sfxWanted){sfxWanted.currentTime=0; sfxWanted.play().catch(()=>{});} } }
     }
 
-    // entrer bâtiment (types 2 & 3)
+    // Entrée bâtiment (types 2 & 3)
     if(wantsCollect){
       for(const b of buildings){
         if(!b.canEnter) continue;
@@ -389,20 +417,19 @@
       }
     }
 
-    // caméra
+    // Caméra & anim
     const W=canvas.width/DPR; cameraX=Math.max(0, player.x - W/2);
-
     player.state=Math.abs(vx)>1e-2?'walk':'idle'; player.animTime+=dt;
 
-    // npcs
+    // PNJ state
     for(const n of npcs){
-      n.animT+=dt; n.face=(player.x<n.x)?'left':'right';
+      n.animT+=dt;
       const dist=Math.abs(player.x-n.x);
-      if(dist<=NPC_TALK_RADIUS){ if(!n.show){ n.dialogImg=pickDialog(n.type); n.show=true; n.hideT=1.0; } else n.hideT=1.0; }
+      if(dist<=NPC_TALK_RADIUS){ if(!n.show){ n.dialogImg=pickDialog(n.type); n.show=true; n.hideT=NPC_HIDE_DELAY; } else n.hideT=NPC_HIDE_DELAY; }
       else if(n.show){ n.hideT-=dt; if(n.hideT<=0){ n.show=false; n.dialogImg=null; } }
     }
 
-    // draw
+    // Draw
     const Wpx=canvas.width/DPR, Hpx=canvas.height/DPR;
     ctx.fillStyle='#0d0f14'; ctx.fillRect(0,0,Wpx,Hpx);
     if(images.back)  drawLayer(images.back, 0.15, 6);
@@ -412,8 +439,10 @@
     drawBuildings(); drawPosters(); drawNPCs(); drawMyo(vx);
   }
 
+  // Intérieurs
   function enterInterior(b){
     mode='interior'; currentBuilding=b; cameraX=0;
+    stopFootsteps();
     if(bgm) bgm.pause(); if(sfxEnter){ sfxEnter.currentTime=0; sfxEnter.play().catch(()=>{}); }
     interiorOpenIdx=0; hacking=false; hackT=0;
     player.x=60; player.y=0; player.vy=0; player.onGround=true; player.facing='right';
@@ -429,6 +458,7 @@
     if(keys.has('ArrowRight')||keys.has('d')){ vx+=MOVE_SPEED; player.facing='right'; }
     if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
     player.x=Math.max(0, Math.min(1220, player.x + vx*dt));
+
     // gravité + sol/plafond
     const floorY=620, ceilY=120;
     if(!player.onGround) player.vy += GRAVITY_DOWN*dt;
@@ -457,6 +487,7 @@
     ctx.fillStyle='#000'; ctx.fillRect(0,0,Wpx,Hpx);
     const base=interiorOpenIdx>0 ? images.interiorOpens[Math.min(9,interiorOpenIdx-1)] : images.interiorClosed;
     if(base) ctx.drawImage(base, 0, 0, Wpx, Hpx);
+
     // Myo
     const frames=(Math.abs(vx)>1e-2?images.myoWalk:images.myoIdle);
     const fps=(Math.abs(vx)>1e-2?8:4);
@@ -471,14 +502,10 @@
   // Game loop
   function loop(ts){ const dt=Math.min((ts-last)/1000||0, 1/30); last=ts; if(mode==='world') updateWorld(dt); else updateInterior(dt); requestAnimationFrame(loop); }
 
-  // Boot
-  async function boot(){ banner('BOOT OK', '#146C43'); await loadAll(); requestAnimationFrame(loop); }
-
-  // Start
+  // Boot & Start
+  async function boot(){ await loadAll(); requestAnimationFrame(loop); }
   startBtn.addEventListener('click', ()=>{ gate.style.display='none'; unmuteOnce(); boot(); }, {once:true});
-  // fallback : si on appuie sur une touche n'importe où
   addEventListener('keydown', function anyKey(){ if(gate && gate.style.display!=='none'){ startBtn.click(); } removeEventListener('keydown', anyKey); });
-  // second fallback : auto-boot au bout de 2s (sans audio) si gate encore visible
   setTimeout(()=>{ if(gate && gate.style.display!=='none'){ startBtn.click(); } }, 2000);
 
 })();
