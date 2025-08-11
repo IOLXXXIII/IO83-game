@@ -1,6 +1,6 @@
 :root { --ui-bg:#000; --ui-fg:#e8e8e8; --ui-accent:#ffcc00; }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--ui-bg);color:var(--ui-fg);
+html,body{height:100%;margin:0;background:#000;color:var(--ui-fg);
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
 
 #game{
@@ -12,6 +12,7 @@ html,body{height:100%;margin:0;background:var(--ui-bg);color:var(--ui-fg);
   image-rendering:pixelated; image-rendering:crisp-edges; outline:none;
 }
 
+/* HUD */
 #hud{
   position:fixed;top:10px;left:50%;transform:translateX(-50%);
   display:flex;gap:24px;align-items:center;z-index:2;pointer-events:none;text-shadow:0 1px 2px #000;
@@ -20,11 +21,15 @@ html,body{height:100%;margin:0;background:var(--ui-bg);color:var(--ui-fg);
 #scoreNum{color:var(--ui-accent)}
 #hint{opacity:.75}
 
+/* Gate / Title */
 #gate{
   position:fixed;inset:0;display:grid;place-items:center;
   background:radial-gradient(1000px 600px at 50% 20%,rgba(255,255,255,.06),rgba(0,0,0,.9)),#000;
   z-index:3;
 }
+#gate .title{position:absolute;top:12%;left:50%;transform:translateX(-50%);height:220px}
+#gate .title img{height:100%;image-rendering:pixelated}
+#gate #title2{position:absolute;left:0;top:0;opacity:0}
 #gate button{
   padding:14px 28px;background:#1b1b1b;color:#fff;border:2px solid #444;border-radius:12px;
   font-weight:800;letter-spacing:.6px;cursor:pointer;
