@@ -1,1 +1,34 @@
+{
+  "aeron": [
+    "dialog_aeron_01.png",
+    "dialog_aeron_02.png",
+    "dialog_aeron_03.png",
+    "dialog_aeron_04.png",
+    "dialog_aeron_05.png"
+  ],
+  "kaito": [
+    "dialog_kaito_01.png",
+    "dialog_kaito_02.png",
+    "dialog_kaito_03.png",
+    "dialog_kaito_04.png",
+    "dialog_kaito_05.png"
+  ],
+  "maonis": [
+    "dialog_maonis_01.png",
+    "dialog_maonis_02.png",
+    "dialog_maonis_03.png",
+    "dialog_maonis_04.png",
+    "dialog_maonis_05.png",
+    "dialog_maonis_06.png"
+  ],
+  "kahikoans": [
+    "dialog_kahikoans_01.png",
+    "dialog_kahikoans_02.png",
+    "dialog_kahikoans_03.png",
+    "dialog_kahikoans_04.png",
+    "dialog_kahikoans_05.png",
+    "dialog_kahikoans_06.png",
+    "dialog_kahikoans_07.png"
+  ]
+}
 
