@@ -24,18 +24,15 @@ html,body{
 #scoreNum{ color:var(--ui-accent) }
 #hint{ opacity:.75 }
 
-/* Écran titre – VRAI plein écran */
+/* Écran titre – plein écran réel */
 #gate{
   position:fixed; inset:0; background:#000; z-index:3;
 }
-#gate .title{
-  position:absolute; inset:0; display:grid; place-items:center;   /* prend 100% de l'écran */
-}
+#gate .title{ position:absolute; inset:0; display:grid; place-items:center; }
 #gate .title img{
-  max-width:92vw; max-height:92vh; width:auto; height:auto;       /* rempli l'écran sans déformer */
+  max-width:92vw; max-height:92vh; width:auto; height:auto;
   image-rendering:pixelated; display:block;
 }
-/* img2 superposée pour le "idle" */
 #gate #title2{ position:absolute; inset:auto; opacity:0 }
 #gate button{
   position:absolute; bottom:8vh; left:50%; transform:translateX(-50%);
