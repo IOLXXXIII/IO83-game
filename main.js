@@ -1,6 +1,12 @@
-// IO83 – main.js (fix Kaito spawn, one-way roofs narrower, interior scale, terminal zone, jump boost, no overlaps, end wall)
-// Remplace ton fichier main.js par CE code complet.
-
+// IO83 – main.js (round fix pack)
+// - Kaito ship loin du début (≥ +6000px) + re-clamp post-spawn
+// - Toits one-way rétrécis (−1/3) et à mi-hauteur (on accroche seulement en DESCENDANT)
+// - Intérieur : Myo ×1.7 et abaissé de 1/6 hauteur ; plafond = haut de l’image uniquement
+// - Terminal zone = dernier quart (x: 75%→100%), moitié basse (y: 50%→100%), large
+// - Progression INT open_1→…→open_10 (séquentiel). Reset auto si stockage incohérent
+// - Mur final −15% taille
+// - PNJ au sol, bulles OK, orientation pile au centre, anti-chevauchement renforcé
+// - Posters = 10 exact, non chevauchants, posés au sol ; à 10 → overlay PNG (si dispo) + son
 (function(){
   'use strict';
 
@@ -8,13 +14,6 @@
   const rndInt=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
   const aabb=(ax,ay,aw,ah,bx,by,bw,bh)=>ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
   const shuffle=a=>{ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1)|0); [a[i],a[j]]=[a[j],a[i]];} return a; };
-  function banner(msg, color='#b00020'){
-    const d=document.createElement('div'); d.textContent=msg;
-    Object.assign(d.style,{position:'fixed',top:'0',left:'0',right:'0',padding:'8px 12px',
-      background:color,color:'#fff',font:'12px/1.2 monospace',zIndex:'9999'});
-    document.body.appendChild(d); setTimeout(()=>d.remove(), 4000);
-  }
-  window.addEventListener('error', e=>banner('JS error → '+(e?.error?.message||e?.message||'unknown')));
 
   /* ---------- canvas ---------- */
   const canvas=document.getElementById('game');
@@ -23,31 +22,44 @@
   function resize(){ const w=1280,h=720; canvas.width=w*DPR; canvas.height=h*DPR; ctx.imageSmoothingEnabled=false; ctx.setTransform(DPR,0,0,DPR,0,0); }
   resize(); addEventListener('resize',resize);
 
-  /* ---------- UI / HUD ---------- */
+  /* ---------- gate / hud ---------- */
   const gate=document.getElementById('gate');
   const startBtn=document.getElementById('startBtn');
   const title2=document.getElementById('title2');
-  const scoreEl=document.getElementById('scoreNum');
 
-  // petite anim sur le title
+  // HUD counters (ajout dynamique si absents)
+  const hud=document.getElementById('hud');
+  let scoreWanted=0, eggsFound=0;
+  let wantedSpan=document.getElementById('scoreNum');
+  if(!wantedSpan){
+    const d=document.createElement('div'); d.id='score'; d.innerHTML='Wanted: <span id="scoreNum">0/10</span>';
+    hud?.appendChild(d); wantedSpan=d.querySelector('#scoreNum');
+  } else { wantedSpan.textContent='0/10'; }
+  let eggSpan=document.getElementById('eggNum');
+  if(!eggSpan){
+    const e=document.createElement('div'); e.id='eggs'; e.innerHTML='??? <span id="eggNum">0/10</span>';
+    hud?.appendChild(e); eggSpan=e.querySelector('#eggNum');
+  } else { eggSpan.textContent='0/10'; }
+
+  // petite anim title
   let tTitle=0; (function loopTitle(){ tTitle+=0.016; if(title2){ const a=(Math.sin(tTitle*1.4)+1)/2; title2.style.opacity=(a*0.75).toFixed(3); } if(gate && gate.style.display!=='none') requestAnimationFrame(loopTitle); })();
 
   /* ---------- audio ---------- */
-  const bgm =document.getElementById('bgm');
-  const sfx ={
+  const bgm=document.getElementById('bgm');
+  const sfx={
     wanted:document.getElementById('sfxWanted'),
-    dash:  document.getElementById('sfxDash'),
-    enter: document.getElementById('sfxEnter'),
-    exit:  document.getElementById('sfxExit'),
-    jump:  document.getElementById('sfxJump'),
-    type:  document.getElementById('sfxType'),
-    ding:  document.getElementById('sfxDing'),
-    foot:  document.getElementById('sfxFoot'),
+    dash:document.getElementById('sfxDash'),
+    enter:document.getElementById('sfxEnter'),
+    exit:document.getElementById('sfxExit'),
+    jump:document.getElementById('sfxJump'),
+    type:document.getElementById('sfxType'),
+    ding:document.getElementById('sfxDing'),
+    foot:document.getElementById('sfxFoot'),
     doorLocked:document.getElementById('sfxDoorLocked')
   };
   const SFX_VOL=0.8; Object.values(sfx).forEach(a=>{ if(a) a.volume=Math.min(1,(a?.volume||1)*SFX_VOL); });
   if(sfx.foot) sfx.foot.volume=Math.min(1,(sfx.foot.volume||1)*0.7);
-  function startAudio(){ if(bgm){ bgm.volume=0.6; bgm.currentTime=0; bgm.muted=false; bgm.play().catch(()=>{}); } }
+  function startAudio(){ if(bgm){ bgm.volume=0.6; bgm.currentTime=0; bgm.muted=false; bgm.play().catch(()=>{});} }
   function fadeTo(audio,target,ms=250){ if(!audio) return; const step=(target-audio.volume)/(ms/50);
     const id=setInterval(()=>{ audio.volume=Math.max(0,Math.min(1,audio.volume+step)); if(Math.abs(audio.volume-target)<0.02){ audio.volume=target; clearInterval(id);} },50);
   }
@@ -86,7 +98,8 @@
     buildingWall:['assets/buildings/building_wall_idle_1.png'+CB,'assets/buildings/building_wall_idle_2.png'+CB],
     dashTrail:[ 'assets/fx/dash_trail_1.png'+CB,'assets/fx/dash_trail_2.png'+CB,'assets/fx/dash_trail_3.png'+CB ],
     interiorClosedIdle:[ 'assets/interiors/interior_closed_idle_1.png'+CB, 'assets/interiors/interior_closed_idle_2.png'+CB ],
-    interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`)
+    interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
+    postersCompletePNG:'assets/ui/posters_complete.png'+CB // optionnel
   };
   const images={
     back:null, mid:null, front:null, myoIdle:[], myoWalk:[],
@@ -94,7 +107,7 @@
     npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
     dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
     buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
-    interiorClosedIdle:[], interiorOpens:[]
+    interiorClosedIdle:[], interiorOpens:[], postersComplete:null
   };
   function loadImgRetry(src){
     return new Promise(res=>{
@@ -119,8 +132,9 @@
   /* ---------- physics ---------- */
   const SPEED_MULT = 1.2 * 1.15;
   const MOVE_SPEED = 360 * SPEED_MULT;
-  const MYO_H      = 120 * 1.5;   // 180 px (monde)
-  const MYO_H_INTERIOR = MYO_H * 1.7; // ~306 px (intérieur demandé)
+  const MYO_H = 120 * 1.5;           // monde
+  const MYO_H_INTERIOR = Math.round(MYO_H * 1.7);
+  const INTERIOR_FOOT_EXTRA = Math.round(MYO_H_INTERIOR/6); // abaissement demandé
   const PLAYER_HALF_W=26;
 
   const GRAVITY_UP=2600, GRAVITY_DOWN=2600*2.2;
@@ -130,7 +144,7 @@
   const AIR_JUMPS=1; let airJumpsUsed=0;
   const COYOTE_TIME=0.10, JUMP_BUFFER=0.12; let coyote=0, jumpBuf=0;
 
-  // Dash
+  // Dash (double-tap)
   const DASH_WINDOW=0.22, DASH_DUR=0.18, DASH_COOLDOWN_GROUND=0.6, DASH_COOLDOWN_AIR=0.28, DASH_MULT=4;
   let lastTapL=-999, lastTapR=-999, dashTimer=0, dashCooldown=0, airDashUsed=0;
   const AIR_SPEED_MULT = 1.2; // boost de vitesse en l’air
@@ -149,7 +163,6 @@
   addEventListener('keyup',e=>{ if(!worldReady) return; keys.delete(e.key); });
 
   const player={ x:0, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0 };
-  let score=0;
 
   /* ---------- footsteps ---------- */
   let footArmed=false;
@@ -159,43 +172,62 @@
   }
   function stopFoot(){ const a=sfx.foot; if(a && !a.paused) a.pause(); }
 
-  /* ---------- posters ---------- */
+  /* ---------- posters (10 exact) ---------- */
+  const POSTERS_TOTAL=10;
   const POSTER_SIZE=Math.round(100*1.2);
   const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[];
 
-  /* ---------- buildings & NPC ---------- */
+  // Overlay fin posters
+  let postersOverlay=null;
+  function ensurePostersOverlay(){
+    if(postersOverlay) return postersOverlay;
+    const wrap=document.createElement('div');
+    Object.assign(wrap.style,{position:'fixed',inset:'0',display:'none',placeItems:'center',background:'rgba(0,0,0,.6)',zIndex:'9998'});
+    const panel=document.createElement('div');
+    Object.assign(panel.style,{position:'relative',padding:'16px',background:'#111',border:'2px solid #444',borderRadius:'12px'});
+    const img=document.createElement('img'); img.alt='Completed';
+    img.style.maxWidth='min(80vw,800px)'; img.style.maxHeight='70vh'; img.style.imageRendering='pixelated';
+    img.src=ASSETS.postersCompletePNG.split('?')[0]; // on tente sans cb
+    const btn=document.createElement('button'); btn.textContent='Close';
+    Object.assign(btn.style,{display:'block',margin:'12px auto 0',padding:'8px 16px',cursor:'pointer',background:'#1b1b1b',color:'#fff',border:'1px solid #555',borderRadius:'8px'});
+    btn.onclick=()=>{ wrap.style.display='none'; };
+    panel.appendChild(img); panel.appendChild(btn); wrap.appendChild(panel); document.body.appendChild(wrap);
+    postersOverlay=wrap; return wrap;
+  }
+
+  /* ---------- buildings / NPC ---------- */
   const BUILDING_TARGET_H=Math.round(450*1.15);
   const VILLAGE_MIN=2, VILLAGE_MAX=3;
   const VILLAGE_GAP_MIN=Math.round(300*1.5), VILLAGE_GAP_MAX=Math.round(800*1.5);
   const buildings=[]; let nextBuildingId=1;
   let worldEndX=20000; let endWall=null;
 
-  // Toit one-way rétréci de 1/3 en largeur, à mi-hauteur
+  // Toit one-way : mi-hauteur + largeur réduite de 1/3
   function makeRoof(bx,by,dw,dh){
     const roofY = by + Math.round(dh*0.50);
-    const roofW = Math.round(dw*0.92 * (2/3)); // 0.92 puis -1/3
+    const roofW = Math.round(dw*0.92 * (2/3));
     const roofX = bx + Math.round((dw - roofW)/2);
     return {x:roofX, y:roofY, w:roofW, h:12};
   }
 
-  const NPC_H=300, NPC_TALK_RADIUS=160, NPC_HIDE_DELAY=1.0;
+  const NPC_H=300, NPC_TALK_RADIUS=160, NPC_HIDE_DELAY=1.0, NPC_FOOT_OFFSET=2;
   const npcs=[];
 
-  /* ---------- dialogs & progression ---------- */
-  let eggIndex = parseInt(localStorage.getItem('io83_egg_index')||'0',10); // 0→ rien, 1..10 → open_*
+  /* ---------- dialogs & eggs ---------- */
+  // Reset si incohérent: si eggIndex>0 mais 0 maisons hackées → on repart à 0
+  let eggIndex = parseInt(localStorage.getItem('io83_egg_index')||'0',10);
   let hackedIds = new Set(JSON.parse(localStorage.getItem('io83_hacked_ids')||'[]'));
+  if(eggIndex<0 || eggIndex>10 || (eggIndex>0 && hackedIds.size===0)){ eggIndex=0; localStorage.setItem('io83_egg_index','0'); }
+  eggsFound = Math.min(10, eggIndex); eggSpan.textContent = `${eggsFound}/10`;
 
   /* ---------- helpers ---------- */
   function buildingCenters(){ return buildings.map((b,idx)=>({idx, x:b.x + Math.round(b.dw/2)})); }
   function pickBuildingIndices(minGap,maxGap,count,startIdxMin=0){
-    const centers = buildingCenters();
-    const idxs = centers.map(c=>c.idx);
-    const picked=[];
-    let last=-9999; let tries=0;
+    const centers = buildingCenters(); const idxs = centers.map(c=>c.idx);
+    const picked=[]; let last=-9999; let tries=0;
     while(picked.length<count && tries<2000){
-      tries++;
-      const cand = idxs[rndInt(0,idxs.length-1)];
+      tries++; const cand = idxs[rndInt(0,idxs.length-1)];
       if(cand<startIdxMin) continue;
       if(picked.includes(cand)) continue;
       if(Math.abs(cand - last) < rndInt(minGap,maxGap)) continue;
@@ -204,27 +236,21 @@
     picked.sort((a,b)=>a-b);
     return picked.map(i=>centers[i]);
   }
-
   function nonOverlapShiftX(x){
-    // repousse x s'il est trop proche d'un autre élément
     let moved=true, guard=0;
-    while(moved && guard++<120){
+    while(moved && guard++<160){
       moved=false;
       for(const b of buildings){
-        const c = b.x + b.dw/2;
-        if(Math.abs(x - c) < (b.dw/2 + 340)){ x = c + (b.dw/2 + 360); moved=true; }
+        const c=b.x+b.dw/2; const minGap=b.dw/2 + 380;
+        if(Math.abs(x-c)<minGap){ x = c + (x<c? -minGap : minGap); moved=true; }
       }
-      for(const p of posters){
-        if(Math.abs(x - p.x) < 420){ x = p.x + 440; moved=true; }
-      }
-      for(const n of npcs){
-        if(Math.abs(x - n.x) < 520){ x = n.x + 540; moved=true; }
-      }
+      for(const p of posters){ if(Math.abs(x-p.x)<480){ x = p.x + 520; moved=true; } }
+      for(const n of npcs){ if(Math.abs(x-n.x)<560){ x = n.x + 600; moved=true; } }
     }
     return x;
   }
 
-  /* ---------- spawn ---------- */
+  /* ---------- spawn & load ---------- */
   let worldReady=false;
 
   async function loadAll(){
@@ -254,48 +280,43 @@
     }catch{/* ok */}
 
     for(const [a,b,id] of ASSETS.buildings){ images.buildings.push([await L(a), (await L(b))||null, id]); }
-    { // building Kaito optionnel
-      const ka=await loadImgRetry(ASSETS.buildingKaito[0]);
-      const kb=ka? await loadImgRetry(ASSETS.buildingKaito[1]) : null;
-      images.buildingKaito = ka ? [ka, kb||ka] : null;
-    }
-    { // mur final optionnel
-      const wa=await loadImgRetry(ASSETS.buildingWall[0]);
-      const wb=wa? await loadImgRetry(ASSETS.buildingWall[1]) : null;
-      images.buildingWall = wa ? [wa, wb||wa] : null;
-    }
-
+    { const ka=await loadImgRetry(ASSETS.buildingKaito[0]); const kb=ka? await loadImgRetry(ASSETS.buildingKaito[1]) : null;
+      images.buildingKaito = ka ? [ka, kb||ka] : null; }
+    { const wa=await loadImgRetry(ASSETS.buildingWall[0]); const wb=wa? await loadImgRetry(ASSETS.buildingWall[1]) : null;
+      images.buildingWall = wa ? [wa, wb||wa] : null; }
     for(const s of ASSETS.dashTrail){ const i=await loadImgRetry(s); if(i) images.dashTrail.push(i); }
     for(const s of ASSETS.interiorClosedIdle){ const i=await loadImgRetry(s); if(i) images.interiorClosedIdle.push(i); }
     for(const s of ASSETS.interiorOpens){ const i=await loadImgRetry(s); if(i) images.interiorOpens.push(i); }
+    images.postersComplete = await loadImgRetry(ASSETS.postersCompletePNG);
 
-    if(miss.length) banner('Missing assets → '+miss.join(', '));
-
+    if(miss.length) console.warn('Missing assets →', miss);
     recalcGround();
 
-    // Posters seed
-    (function seedPosters(){
-      posters.length=0;
-      const seg=5000, rep=2; let x=900;
-      for(let k=0;k<rep;k++){
-        const n=rndInt(3,5);
-        for(let i=0;i<n;i++){ x += rndInt(1200,1900); posters.push({x:x+k*seg,y:GROUND_Y-POSTER_SIZE,w:POSTER_SIZE,h:POSTER_SIZE,taking:false,t:0,taken:false}); }
-      }
-    })();
-
+    seedPosters10();
     spawnVillages();
     spawnNPCsOnce();
     placePostersNonOverlapping();
     ensureAtLeastEnterable(10);
     computeWorldEnd();
     spawnEndWall();
+    ensurePostersOverlay();
 
     worldReady=true;
   }
 
+  function seedPosters10(){
+    posters.length=0;
+    // 10 positions progressives, espacées, à partir ~1200px
+    let x = 1200;
+    for(let i=0;i<POSTERS_TOTAL;i++){
+      x += rndInt(1000,1800);
+      posters.push({x,y:0,w:POSTER_SIZE,h:POSTER_SIZE,taking:false,t:0,taken:false});
+    }
+  }
+
   function spawnVillages(){
     buildings.length=0;
-    const startX=900, endX=(posters.at(-1)?.x||12000)+2600;
+    const startX=900, endX=(posters.at(-1)?.x||12000)+3000;
     let x=startX;
     while(x<endX){
       const count=(Math.random()<0.65)? rndInt(VILLAGE_MIN,VILLAGE_MAX):1;
@@ -315,22 +336,23 @@
     }
   }
 
-  function spawnNPCsOnce(){
-    npcs.length=0;
-    const centers=buildingCenters(); if(!centers.length) return;
+  function buildingCenters(){ return buildings.map((b,idx)=>({idx, x:b.x + Math.round(b.dw/2)})); }
 
+  function spawnNPCsOnce(){
+    npcs.length=0; const centers=buildingCenters(); if(!centers.length) return;
     const GAP_MIN=5, GAP_MAX=8;
 
-    // Aeron (1) – pas trop tôt
+    // Aeron (1)
     for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,1,3)){
       placeNPC('aeron', nonOverlapShiftX(c.x));
     }
-    // Kaito (1) – loin du début + ship avant lui
-    const kaitoPick = pickBuildingIndices(GAP_MIN,GAP_MAX,1,12)[0]; // >= ~12e bâtiment
-    if(kaitoPick){
-      const minX= (buildings[0]?.x||900) + 3000; // au moins à ~3000px du début
-      placeNPC('kaito', nonOverlapShiftX(Math.max(kaitoPick.x,minX)), true);
-    }
+    // Kaito (1) loin + ship avant lui
+    const firstX = buildings[0]?.x || 900;
+    const kaitoPick = pickBuildingIndices(GAP_MIN,GAP_MAX,1,12)[0] || {x:firstX+7000};
+    let kaitoX = Math.max(kaitoPick.x, firstX + 6000); // **≥ +6000px**
+    kaitoX = nonOverlapShiftX(kaitoX);
+    placeNPC('kaito', kaitoX, true);
+
     // Maonis (2)
     for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,2,4)){
       placeNPC('maonis', nonOverlapShiftX(c.x));
@@ -339,25 +361,34 @@
     for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,3,3)){
       placeNPC('kahikoans', nonOverlapShiftX(c.x));
     }
+
+    // Sécurise: si ship Kaito < firstX+5500 → on translate +4000
+    for(const b of buildings){
+      if(b.typeId===98){
+        const minX = firstX + 5500;
+        if(b.x < minX){ const dx=minX - b.x; b.x += dx; b.doorX += dx; b.roof.x += dx; }
+      }
+    }
   }
 
   function placeNPC(type, x, withShip=false){
-    // Check “safe” x (sans chevauchement)
     x = nonOverlapShiftX(x);
-
     const frames=images.npcs[type]; if(!frames?.length) return;
 
     const list = images.dialogs[type]?.slice()||[]; shuffle(list);
     const npc={type, x, frames, animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogList:list, dialogIdx:0};
     npcs.push(npc);
 
-    // Vaisseau avant Kaito (bâtiment dédié, jamais au début)
     if(withShip && images.buildingKaito){
       const base=images.buildingKaito[0], s=BUILDING_TARGET_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
       let bx = x - (dw + 140), by=GROUND_Y-dh;
-      // repousse si chevauche un autre building
-      let moved=true, guard=0;
-      while(moved && guard++<60){
+      // jamais au tout début
+      const minBX = (buildings[0]?.x||900)+4000;
+      if(bx<minBX) bx=minBX;
+
+      // repousse si chevauche
+      let guard=0, moved=true;
+      while(moved && guard++<80){
         moved=false;
         for(const b of buildings){
           const overlap = !(bx+dw < b.x-60 || bx > b.x+b.dw+60);
@@ -370,16 +401,24 @@
   }
 
   function placePostersNonOverlapping(){
-    posters.sort((a,b)=>a.x-b.x);
-    for(let i=0;i<posters.length;i++){
-      const p=posters[i];
+    for(const p of posters){
+      // éviter buildings
       for(const b of buildings){
-        const left = b.x - 480, right = b.x + b.dw + 480;
-        if(p.x>left && p.x<right) p.x = right + rndInt(80,160);
+        const left=b.x-500, right=b.x+b.dw+500;
+        if(p.x>left && p.x<right) p.x = right + rndInt(100,220);
       }
-      for(const n of npcs){ if(Math.abs(p.x-n.x)<420) p.x = n.x + 460; }
-      if(i>0 && p.x - posters[i-1].x < 560) p.x = posters[i-1].x + 580;
+      // éviter npcs
+      for(const n of npcs){
+        if(Math.abs(p.x-n.x)<500) p.x = n.x + 520;
+      }
       p.y = GROUND_Y - POSTER_SIZE;
+    }
+    // garantir espacement entre posters
+    posters.sort((a,b)=>a.x-b.x);
+    for(let i=1;i<posters.length;i++){
+      if(posters[i].x - posters[i-1].x < 600){
+        posters[i].x = posters[i-1].x + 600;
+      }
     }
   }
 
@@ -401,21 +440,16 @@
 
   function spawnEndWall(){
     if(!images.buildingWall) return;
-    const base = images.buildingWall[0]; if(!base) return;
-    const screenH = canvas.height/DPR;
-    const targetH = Math.round(screenH * 1.25);
-    const s = targetH / base.height;
-    const dw = Math.round(base.width * s);
-    const dh = Math.round(base.height* s);
-    const x = worldEndX - 800; // un peu avant la fin “logique”
-    const y = GROUND_Y - dh;
+    const base=images.buildingWall[0]; if(!base) return;
+    const screenH=canvas.height/DPR;
+    const targetH=Math.round(screenH * 1.25 * 0.85); // −15%
+    const s=targetH/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
+    const x = worldEndX - 800; const y = GROUND_Y - dh;
     endWall = {frames:images.buildingWall, animT:0, x, y, dw, dh};
-    worldEndX = endWall.x - 8; // blocage
+    worldEndX = endWall.x - 8;
   }
 
-  /* ---------- modes ---------- */
-  let mode='world', interiorOpenIdx=0, hacking=false, hackT=0, currentBuilding=null;
-
+  /* ---------- input / movement ---------- */
   function tryDash(dir){
     if(dashCooldown>0) return;
     if(!player.onGround){
@@ -427,21 +461,7 @@
     if(sfx.dash){ sfx.dash.currentTime=0; sfx.dash.play().catch(()=>{}); }
   }
 
-  function enterInterior(b){
-    mode='interior'; currentBuilding=b; cameraX=0; stopFoot();
-    if(bgm) fadeTo(bgm,0.12,250);
-    interiorOpenIdx=0; hacking=false; hackT=0;
-    player.x=60; player.y=12; player.vy=0; player.onGround=true; player.facing='right'; // plus bas
-  }
-  function exitInterior(){
-    mode='world';
-    if(bgm) fadeTo(bgm,0.6,250);
-    if(sfx.exit){ sfx.exit.currentTime=0; sfx.exit.play().catch(()=>{}); }
-    if(currentBuilding){ player.x=currentBuilding.doorX + currentBuilding.doorW/2; player.y=0; player.vy=0; player.onGround=true; }
-    currentBuilding=null;
-  }
-
-  /* ---------- render helpers ---------- */
+  /* ---------- draw helpers ---------- */
   function drawLayer(img,f,den,yParallax=0){
     const W=canvas.width/DPR, H=canvas.height/DPR;
     const s=(den*W)/img.width, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
@@ -489,7 +509,7 @@
     for(const n of npcs){
       const base=n.frames[0]; if(!base) continue;
       const s=NPC_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
-      const sy=GROUND_Y - dh + yOff + 2;
+      const sy=GROUND_Y - dh + yOff + NPC_FOOT_OFFSET;
       const sx=Math.floor(n.x - cameraX);
       if(player.x < n.x) n.face='left'; else if(player.x > n.x) n.face='right';
       const idx=(Math.floor(n.animT*2)%2); const img=n.frames[Math.min(idx,n.frames.length-1)]||base;
@@ -499,14 +519,12 @@
       else ctx.drawImage(img,sx,sy,dw,dh);
       ctx.restore();
 
-      // bulle cyclique
       if(n.show){
         if(!n.dialogList || n.dialogList.length===0) n.dialogImg=null;
         if(!n.dialogImg && n.dialogList && n.dialogList.length){
-          const imgD = n.dialogList[n.dialogIdx % n.dialogList.length];
-          n.dialogIdx++; n.dialogImg = imgD;
+          const imgD=n.dialogList[n.dialogIdx % n.dialogList.length]; n.dialogIdx++; n.dialogImg=imgD;
         }
-      } else { n.dialogImg=null; }
+      } else n.dialogImg=null;
       if(n.show && n.dialogImg){
         const scale=0.6, bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
         const bx = sx + Math.round(dw/2 - bw*1.0);
@@ -517,17 +535,15 @@
     }
   }
   function drawEndWall(yOff){
-    if(!endWall) return;
-    const frame=(Math.floor(endWall.animT*2)%2===0)? endWall.frames[0]:(endWall.frames[1]||endWall.frames[0]);
-    const sx=Math.floor(endWall.x - cameraX);
-    if(frame) ctx.drawImage(frame, sx, endWall.y + yOff, endWall.dw, endWall.dh);
+    if(!endWall) return; const frame=(Math.floor(endWall.animT*2)%2===0)? endWall.frames[0]:(endWall.frames[1]||endWall.frames[0]);
+    const sx=Math.floor(endWall.x - cameraX); if(frame) ctx.drawImage(frame, sx, endWall.y + yOff, endWall.dw, endWall.dh);
   }
 
   /* ---------- world loop ---------- */
+  let last=0;
   function updateWorld(dt){
     let vx=0;
     const baseSpeed = MOVE_SPEED * (player.onGround || dashTimer>0 ? 1 : AIR_SPEED_MULT);
-
     if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*baseSpeed*DASH_MULT; dashTimer-=dt; }
     else{
       if(keys.has('ArrowRight')||keys.has('d')){ vx+=baseSpeed; player.facing='right'; }
@@ -542,10 +558,9 @@
     else coyote=Math.max(0,coyote-dt);
     jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
 
-    const wantJump=jumpBuf>0;
-    if(wantJump){
-      if(player.onGround || coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; if(sfx.jump){sfx.jump.currentTime=0; sfx.jump.play().catch(()=>{});} }
-      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; if(sfx.jump){sfx.jump.currentTime=0; sfx.jump.play().catch(()=>{});} }
+    if(jumpBuf>0){
+      if(player.onGround || coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
+      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
     }
 
     if(dashTimer<=0){ if(player.vy<0) player.vy+=GRAVITY_UP*dt; else player.vy+=GRAVITY_DOWN*dt; } else { player.vy=0; }
@@ -555,7 +570,7 @@
     // sol
     if(GROUND_Y + player.y > GROUND_Y){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
 
-    // one-way roofs (accroche en descendant, zone réduite)
+    // toits one-way
     for(const b of buildings){
       const feetY = GROUND_Y + player.y;
       const top   = b.roof.y;
@@ -568,33 +583,34 @@
       }
     }
 
-    // PNJ talk
+    // PNJ talk on/off
     for(const n of npcs){
       const near = Math.abs(player.x - n.x) <= NPC_TALK_RADIUS;
       if(near){ n.show=true; n.hideT=0; }
       else if(n.show){
-        n.hideT += dt; if(n.hideT>=NPC_HIDE_DELAY){ n.show=false; n.dialogImg=null; n.hideT=0; }
+        n.hideT = (n.hideT||0) + dt; if(n.hideT>=1.0){ n.show=false; n.dialogImg=null; n.hideT=0; }
       }
     }
 
-    // Collecte affiches
+    // posters collecte
     const wantsCollect=keys.has('ArrowDown')||keys.has('s');
     const feetY=GROUND_Y-110+player.y;
     for(const p of posters){
       const center=p.x + p.w/2, dx=Math.abs(player.x - center);
       const overY=aabb(player.x-26, feetY, 52,110, p.x,p.y,p.w,p.h);
       if(!p.taken && !p.taking && dx<=COLLECT_RADIUS && overY && wantsCollect){ p.taking=true; p.t=0; }
-      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; score++; scoreEl.textContent=String(score); if(sfx.wanted){sfx.wanted.currentTime=0; sfx.wanted.play().catch(()=>{});} } }
+      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; scoreWanted++; wantedSpan.textContent=`${scoreWanted}/${POSTERS_TOTAL}`; sfx.wanted?.play().catch(()=>{});
+        if(scoreWanted>=POSTERS_TOTAL){ ensurePostersOverlay().style.display='grid'; } } }
     }
 
-    // Entrée / portes
+    // portes (toute largeur)
     if(wantsCollect){
       for(const b of buildings){
         const atDoor = (player.x>b.doorX && player.x<b.doorX+b.doorW);
         const sameLevel = Math.abs((GROUND_Y+player.y)-(b.y+b.dh))<150;
         if(atDoor && sameLevel){
           if(b.canEnter){ enterInterior(b); break; }
-          else if(sfx.doorLocked){ sfx.doorLocked.currentTime=0; sfx.doorLocked.play().catch(()=>{}); }
+          else sfx.doorLocked?.play().catch(()=>{});
         }
       }
     }
@@ -622,89 +638,112 @@
   }
 
   /* ---------- interior loop ---------- */
+  let mode='world', interiorOpenIdx=0, hacking=false, hackT=0, currentBuilding=null;
+  function enterInterior(b){
+    mode='interior'; currentBuilding=b; cameraX=0; stopFoot();
+    if(bgm) fadeTo(bgm,0.12,250);
+    interiorOpenIdx=0; hacking=false; hackT=0;
+    player.x=60; player.y=12; player.vy=0; player.onGround=true; player.facing='right';
+  }
+  function exitInterior(){
+    mode='world';
+    if(bgm) fadeTo(bgm,0.6,250);
+    sfx.exit?.play().catch(()=>{});
+    if(currentBuilding){ player.x=currentBuilding.doorX + currentBuilding.doorW/2; player.y=0; player.vy=0; player.onGround=true; }
+    currentBuilding=null;
+  }
+
   function updateInterior(dt){
+    const W=canvas.width/DPR, H=canvas.height/DPR;
+    const floorY = H - 40;         // sol bas
+    const ceilY  = 0;              // plafond = haut de l’image UNIQUEMENT
+
     let vx=0;
-    const baseSpeed = MOVE_SPEED * AIR_SPEED_MULT; // intérieur: mouvement agréable
+    const baseSpeed = MOVE_SPEED * AIR_SPEED_MULT;
     if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*baseSpeed*DASH_MULT; dashTimer-=dt; }
     else{
       if(keys.has('ArrowRight')||keys.has('d')){ vx+=baseSpeed; player.facing='right'; }
       if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=baseSpeed; player.facing='left'; }
     }
-    player.x=Math.max(0, Math.min(1220, player.x + vx*dt));
+    player.x=Math.max(0, Math.min(W-60, player.x + vx*dt));
 
     if(player.onGround){ coyote=COYOTE_TIME; airJumpsUsed=0; airDashUsed=0; } else coyote=Math.max(0,coyote-dt);
     jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
-    const wantJump=jumpBuf>0;
-    if(wantJump){
-      if(player.onGround || coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; if(sfx.jump){sfx.jump.currentTime=0; sfx.jump.play().catch(()=>{});} }
-      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; if(sfx.jump){sfx.jump.currentTime=0; sfx.jump.play().catch(()=>{});} }
+    if(jumpBuf>0){
+      if(player.onGround || coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
+      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
     }
     if(dashTimer<=0){ if(player.vy<0) player.vy+=GRAVITY_UP*dt; else player.vy+=GRAVITY_DOWN*dt; } else { player.vy=0; }
     player.y += player.vy*dt;
 
-    const floorY=650, ceilY=120;
     if(floorY + player.y > floorY){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
-    const headY = floorY - MYO_H_INTERIOR + player.y; if(headY<ceilY){ player.y+=(ceilY-headY); player.vy=0; }
+    const headY = floorY - MYO_H_INTERIOR + player.y;
+    if(headY<ceilY){ player.y+=(ceilY-headY); player.vy=0; }
 
     if(player.x<=0 && !hacking){ exitInterior(); return; }
 
+    // Terminal: zone élargie = dernier quart (x>=0.75W), moitié basse (y>=0.5H)
     const wantsCollect=keys.has('ArrowDown')||keys.has('s');
-    const W=canvas.width/DPR, termX0=Math.floor(W*0.75); // dernier 1/4 (plus large vers la gauche)
-    if(!hacking && wantsCollect && player.x>=termX0){
-      hacking=true; hackT=0; if(sfx.type){ sfx.type.currentTime=0; sfx.type.play().catch(()=>{}); }
+    const termRect={ x:Math.floor(W*0.75), y:Math.floor(H*0.5), w:Math.floor(W*0.25), h:Math.floor(H*0.5) };
+    const myoW=48, myoH=MYO_H_INTERIOR; // approx hitbox
+    const myoRect={ x:player.x-24, y:(floorY - myoH + player.y + INTERIOR_FOOT_EXTRA), w:myoW, h:myoH };
+    const inTerm = aabb(myoRect.x,myoRect.y,myoRect.w,myoRect.h, termRect.x,termRect.y,termRect.w,termRect.h);
+
+    if(!hacking && wantsCollect && inTerm){
+      hacking=true; hackT=0; sfx.type?.play().catch(()=>{});
     }
     if(hacking){
       hackT+=dt;
       if(hackT>=1.5){
-        hacking=false; hackT=0;
-        if(sfx.ding){ sfx.ding.currentTime=0; sfx.ding.play().catch(()=>{}); }
+        hacking=false; hackT=0; sfx.ding?.play().catch(()=>{});
         if(currentBuilding && !hackedIds.has(currentBuilding.id)){
           hackedIds.add(currentBuilding.id);
-          eggIndex = Math.min(10, eggIndex+1); // progression 1→10
+          eggIndex = Math.min(10, eggIndex+1); // 1→10
           localStorage.setItem('io83_egg_index', String(eggIndex));
           localStorage.setItem('io83_hacked_ids', JSON.stringify([...hackedIds]));
+          eggsFound = eggIndex; eggSpan.textContent = `${eggsFound}/10`;
         }
-        interiorOpenIdx=Math.max(1, eggIndex); // affiche open_1 puis 2, etc.
+        interiorOpenIdx=Math.max(1, eggIndex);
       }
     }
 
-    // draw interior
+    // draw
     player.state=Math.abs(vx)>1e-2?'walk':'idle'; player.animTime+=dt;
-    const Wpx=canvas.width/DPR, Hpx=canvas.height/DPR;
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,Wpx,Hpx);
+    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
 
     if(interiorOpenIdx===0){
       const frames=images.interiorClosedIdle;
       const idx=frames.length>1 ? Math.floor(player.animTime*2)%frames.length : 0;
-      const img=frames[idx]||frames[0];
-      if(img) ctx.drawImage(img,0,0,Wpx,Hpx);
+      const img=frames[idx]||frames[0]; if(img) ctx.drawImage(img,0,0,W,H);
     }else{
       const base=images.interiorOpens[Math.min(9,interiorOpenIdx-1)];
-      if(base) ctx.drawImage(base,0,0,Wpx,Hpx);
+      if(base) ctx.drawImage(base,0,0,W,H);
     }
 
-    // Myo plus grand & plus bas
+    // Myo plus grand et ABAISSÉ de 1/6
     const frames2=(Math.abs(vx)>1e-2?images.myoWalk:images.myoIdle);
     const fps=(Math.abs(vx)>1e-2?8:4);
     const idx2=frames2.length>1 ? Math.floor(player.animTime*fps)%frames2.length : 0;
     const img2=frames2[idx2]||images.myoIdle[0];
     if(img2){
       const s=MYO_H_INTERIOR/img2.height, dw=Math.round(img2.width*s), dh=Math.round(img2.height*s);
-      const x=Math.floor(player.x), y=floorY - dh + player.y + 10; // encore un peu plus bas
+      const x=Math.floor(player.x), y=floorY - dh + player.y + INTERIOR_FOOT_EXTRA;
       ctx.save(); if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img2,0,0,dw,dh); } else ctx.drawImage(img2,x,y,dw,dh); ctx.restore();
     }
   }
 
   function loop(ts){ const dt=Math.min((ts - (loop.last||ts))/1000, 1/30); loop.last=ts;
     if(!worldReady){
-      const Wpx=canvas.width/DPR, Hpx=canvas.height/DPR;
-      ctx.fillStyle='#000'; ctx.fillRect(0,0,Wpx,Hpx);
-      ctx.fillStyle='#fff'; ctx.font='16px monospace'; ctx.fillText('Loading…', 24, 40);
+      // écran de chargement noir discret
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
       requestAnimationFrame(loop); return;
     }
     if(mode==='world') updateWorld(dt); else updateInterior(dt);
     requestAnimationFrame(loop);
   }
+
+  /* ---------- enter/exit ---------- */
+  function enterInterior(b){ /* déjà défini plus haut */ }
 
   /* ---------- start ---------- */
   async function startGame(){
