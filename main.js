@@ -1,9 +1,5 @@
-// IO83 – main.js (one-way plats fix + dialog cycle + NPC spacing)
-// - Bâtiments: plateformes "one-way" (on ne s'accroche que si on TOMBE d'au-dessus).
-//   Surface solide à mi-hauteur du visuel (dh*0.5) comme demandé.
-// - Entrée portes rétablie (collision toit n'intercepte plus le sol).
-// - PNJ: bulles reviennent, et phrases CYCLIQUES (liste mélangée → suivante à chaque approche).
-// - Spawn PNJ: espacés de 5–8 bâtiments, Kaito pas en tout début, vaisseau avant Kaito.
+// IO83 – main.js (fix Kaito spawn, one-way roofs narrower, interior scale, terminal zone, jump boost, no overlaps, end wall)
+// Remplace ton fichier main.js par CE code complet.
 
 (function(){
   'use strict';
@@ -27,10 +23,13 @@
   function resize(){ const w=1280,h=720; canvas.width=w*DPR; canvas.height=h*DPR; ctx.imageSmoothingEnabled=false; ctx.setTransform(DPR,0,0,DPR,0,0); }
   resize(); addEventListener('resize',resize);
 
-  /* ---------- title / start ---------- */
+  /* ---------- UI / HUD ---------- */
   const gate=document.getElementById('gate');
   const startBtn=document.getElementById('startBtn');
   const title2=document.getElementById('title2');
+  const scoreEl=document.getElementById('scoreNum');
+
+  // petite anim sur le title
   let tTitle=0; (function loopTitle(){ tTitle+=0.016; if(title2){ const a=(Math.sin(tTitle*1.4)+1)/2; title2.style.opacity=(a*0.75).toFixed(3); } if(gate && gate.style.display!=='none') requestAnimationFrame(loopTitle); })();
 
   /* ---------- audio ---------- */
@@ -84,6 +83,7 @@
       ['assets/buildings/building_4_idle_1.png'+CB,'assets/buildings/building_4_idle_2.png'+CB,4]
     ],
     buildingKaito:['assets/buildings/building_kaito_idle_1.png'+CB,'assets/buildings/building_kaito_idle_2.png'+CB],
+    buildingWall:['assets/buildings/building_wall_idle_1.png'+CB,'assets/buildings/building_wall_idle_2.png'+CB],
     dashTrail:[ 'assets/fx/dash_trail_1.png'+CB,'assets/fx/dash_trail_2.png'+CB,'assets/fx/dash_trail_3.png'+CB ],
     interiorClosedIdle:[ 'assets/interiors/interior_closed_idle_1.png'+CB, 'assets/interiors/interior_closed_idle_2.png'+CB ],
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`)
@@ -93,7 +93,7 @@
     posterWith:null, posterWithout:null,
     npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
     dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
-    buildings:[], buildingKaito:null, dashTrail:[],
+    buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
     interiorClosedIdle:[], interiorOpens:[]
   };
   function loadImgRetry(src){
@@ -119,7 +119,8 @@
   /* ---------- physics ---------- */
   const SPEED_MULT = 1.2 * 1.15;
   const MOVE_SPEED = 360 * SPEED_MULT;
-  const MYO_H      = 120 * 1.5;   // 180 px
+  const MYO_H      = 120 * 1.5;   // 180 px (monde)
+  const MYO_H_INTERIOR = MYO_H * 1.7; // ~306 px (intérieur demandé)
   const PLAYER_HALF_W=26;
 
   const GRAVITY_UP=2600, GRAVITY_DOWN=2600*2.2;
@@ -132,6 +133,7 @@
   // Dash
   const DASH_WINDOW=0.22, DASH_DUR=0.18, DASH_COOLDOWN_GROUND=0.6, DASH_COOLDOWN_AIR=0.28, DASH_MULT=4;
   let lastTapL=-999, lastTapR=-999, dashTimer=0, dashCooldown=0, airDashUsed=0;
+  const AIR_SPEED_MULT = 1.2; // boost de vitesse en l’air
 
   const keys=new Set();
   addEventListener('keydown',e=>{
@@ -147,7 +149,7 @@
   addEventListener('keyup',e=>{ if(!worldReady) return; keys.delete(e.key); });
 
   const player={ x:0, y:0, vy:0, onGround:true, facing:'right', state:'idle', animTime:0 };
-  const scoreEl=document.getElementById('scoreNum'); let score=0;
+  let score=0;
 
   /* ---------- footsteps ---------- */
   let footArmed=false;
@@ -167,12 +169,13 @@
   const VILLAGE_MIN=2, VILLAGE_MAX=3;
   const VILLAGE_GAP_MIN=Math.round(300*1.5), VILLAGE_GAP_MAX=Math.round(800*1.5);
   const buildings=[]; let nextBuildingId=1;
-  let worldEndX=20000;
+  let worldEndX=20000; let endWall=null;
 
-  // One-way roof collider: placé à 50% de la hauteur du sprite
+  // Toit one-way rétréci de 1/3 en largeur, à mi-hauteur
   function makeRoof(bx,by,dw,dh){
-    const roofY = by + Math.round(dh*0.50); // “sol solide” plus bas (demande ÷2)
-    const roofW = Math.round(dw*0.92), roofX = bx + Math.round((dw-roofW)/2);
+    const roofY = by + Math.round(dh*0.50);
+    const roofW = Math.round(dw*0.92 * (2/3)); // 0.92 puis -1/3
+    const roofX = bx + Math.round((dw - roofW)/2);
     return {x:roofX, y:roofY, w:roofW, h:12};
   }
 
@@ -180,19 +183,16 @@
   const npcs=[];
 
   /* ---------- dialogs & progression ---------- */
-  let eggIndex = parseInt(localStorage.getItem('io83_egg_index')||'0',10);
+  let eggIndex = parseInt(localStorage.getItem('io83_egg_index')||'0',10); // 0→ rien, 1..10 → open_*
   let hackedIds = new Set(JSON.parse(localStorage.getItem('io83_hacked_ids')||'[]'));
 
   /* ---------- helpers ---------- */
   function buildingCenters(){ return buildings.map((b,idx)=>({idx, x:b.x + Math.round(b.dw/2)})); }
-
-  // Choisit des indices de bâtiments espacés (minGap..maxGap), avec index de départ min
   function pickBuildingIndices(minGap,maxGap,count,startIdxMin=0){
     const centers = buildingCenters();
     const idxs = centers.map(c=>c.idx);
     const picked=[];
-    let last=-9999;
-    let tries=0;
+    let last=-9999; let tries=0;
     while(picked.length<count && tries<2000){
       tries++;
       const cand = idxs[rndInt(0,idxs.length-1)];
@@ -203,6 +203,25 @@
     }
     picked.sort((a,b)=>a-b);
     return picked.map(i=>centers[i]);
+  }
+
+  function nonOverlapShiftX(x){
+    // repousse x s'il est trop proche d'un autre élément
+    let moved=true, guard=0;
+    while(moved && guard++<120){
+      moved=false;
+      for(const b of buildings){
+        const c = b.x + b.dw/2;
+        if(Math.abs(x - c) < (b.dw/2 + 340)){ x = c + (b.dw/2 + 360); moved=true; }
+      }
+      for(const p of posters){
+        if(Math.abs(x - p.x) < 420){ x = p.x + 440; moved=true; }
+      }
+      for(const n of npcs){
+        if(Math.abs(x - n.x) < 520){ x = n.x + 540; moved=true; }
+      }
+    }
+    return x;
   }
 
   /* ---------- spawn ---------- */
@@ -234,13 +253,16 @@
       }
     }catch{/* ok */}
 
-    for(const [a,b,id] of ASSETS.buildings){
-      images.buildings.push([await L(a), (await L(b))||null, id]);
-    }
+    for(const [a,b,id] of ASSETS.buildings){ images.buildings.push([await L(a), (await L(b))||null, id]); }
     { // building Kaito optionnel
       const ka=await loadImgRetry(ASSETS.buildingKaito[0]);
       const kb=ka? await loadImgRetry(ASSETS.buildingKaito[1]) : null;
       images.buildingKaito = ka ? [ka, kb||ka] : null;
+    }
+    { // mur final optionnel
+      const wa=await loadImgRetry(ASSETS.buildingWall[0]);
+      const wb=wa? await loadImgRetry(ASSETS.buildingWall[1]) : null;
+      images.buildingWall = wa ? [wa, wb||wa] : null;
     }
 
     for(const s of ASSETS.dashTrail){ const i=await loadImgRetry(s); if(i) images.dashTrail.push(i); }
@@ -256,8 +278,8 @@
       posters.length=0;
       const seg=5000, rep=2; let x=900;
       for(let k=0;k<rep;k++){
-        const n=rndInt(4,6);
-        for(let i=0;i<n;i++){ x += rndInt(1100,1800); posters.push({x:x+k*seg,y:GROUND_Y-POSTER_SIZE,w:POSTER_SIZE,h:POSTER_SIZE,taking:false,t:0,taken:false}); }
+        const n=rndInt(3,5);
+        for(let i=0;i<n;i++){ x += rndInt(1200,1900); posters.push({x:x+k*seg,y:GROUND_Y-POSTER_SIZE,w:POSTER_SIZE,h:POSTER_SIZE,taking:false,t:0,taken:false}); }
       }
     })();
 
@@ -266,6 +288,7 @@
     placePostersNonOverlapping();
     ensureAtLeastEnterable(10);
     computeWorldEnd();
+    spawnEndWall();
 
     worldReady=true;
   }
@@ -284,7 +307,7 @@
         const s=BUILDING_TARGET_H/im1.height, dw=Math.round(im1.width*s), dh=Math.round(im1.height*s);
         const bx=x, by=GROUND_Y-dh;
         const doorW=dw, doorX=bx;
-        const roof=makeRoof(bx,by,dw,dh); // *** toit à mi-hauteur
+        const roof=makeRoof(bx,by,dw,dh);
         buildings.push({id:nextBuildingId++, typeId, canEnter, frames:[im1,im2||im1], animT:0, x:bx,y:by,dw,dh,doorX,doorW, roof});
         x += dw + rndInt(28,64);
       }
@@ -296,47 +319,39 @@
     npcs.length=0;
     const centers=buildingCenters(); if(!centers.length) return;
 
-    // Spacings en indices de bâtiments
     const GAP_MIN=5, GAP_MAX=8;
 
-    // Aeron (1)
-    for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,1,2)){
-      placeNPC('aeron', c.x);
+    // Aeron (1) – pas trop tôt
+    for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,1,3)){
+      placeNPC('aeron', nonOverlapShiftX(c.x));
     }
-    // Kaito (1) – pas trop tôt → startIdxMin = ~8
-    const kaitoPos = pickBuildingIndices(GAP_MIN,GAP_MAX,1,8)[0];
-    if(kaitoPos) placeNPC('kaito', kaitoPos.x, true /*with ship*/);
-
+    // Kaito (1) – loin du début + ship avant lui
+    const kaitoPick = pickBuildingIndices(GAP_MIN,GAP_MAX,1,12)[0]; // >= ~12e bâtiment
+    if(kaitoPick){
+      const minX= (buildings[0]?.x||900) + 3000; // au moins à ~3000px du début
+      placeNPC('kaito', nonOverlapShiftX(Math.max(kaitoPick.x,minX)), true);
+    }
     // Maonis (2)
-    for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,2,3)){
-      placeNPC('maonis', c.x);
+    for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,2,4)){
+      placeNPC('maonis', nonOverlapShiftX(c.x));
     }
     // Kahi Koans (3)
-    for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,3,2)){
-      placeNPC('kahikoans', c.x);
+    for(const c of pickBuildingIndices(GAP_MIN,GAP_MAX,3,3)){
+      placeNPC('kahikoans', nonOverlapShiftX(c.x));
     }
   }
 
   function placeNPC(type, x, withShip=false){
-    // Évite chevauchements avec posters/bâtiments
-    let tries=240;
-    while(tries--){
-      let bad=false;
-      for(const b of buildings) if(Math.abs(x-(b.x+b.dw/2)) < (b.dw/2 + 280)){ bad=true; break; }
-      if(!bad) for(const p of posters)   if(Math.abs(x-p.x) < 360){ bad=true; break; }
-      if(!bad) break;
-      x += rndInt(320,540);
-    }
+    // Check “safe” x (sans chevauchement)
+    x = nonOverlapShiftX(x);
+
     const frames=images.npcs[type]; if(!frames?.length) return;
 
-    // Dialog list cyclique
-    const list = images.dialogs[type]?.slice()||[];
-    shuffle(list);
-
+    const list = images.dialogs[type]?.slice()||[]; shuffle(list);
     const npc={type, x, frames, animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogList:list, dialogIdx:0};
     npcs.push(npc);
 
-    // Vaisseau avant Kaito
+    // Vaisseau avant Kaito (bâtiment dédié, jamais au début)
     if(withShip && images.buildingKaito){
       const base=images.buildingKaito[0], s=BUILDING_TARGET_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
       let bx = x - (dw + 140), by=GROUND_Y-dh;
@@ -346,10 +361,10 @@
         moved=false;
         for(const b of buildings){
           const overlap = !(bx+dw < b.x-60 || bx > b.x+b.dw+60);
-          if(overlap){ bx = b.x - dw - 100; moved=true; }
+          if(overlap){ bx = b.x - dw - 120; moved=true; }
         }
       }
-      buildings.push({id:nextBuildingId++, typeId:98, canEnter:false, frames:[images.buildingKaito[0],images.buildingKaito[1]], animT:0,
+      buildings.push({id:nextBuildingId++, typeId:98, canEnter:false, frames:[images.buildingKaito[0],images.buildingKaito[1]||images.buildingKaito[0]], animT:0,
         x:bx,y:by,dw,dh,doorX:bx,doorW:dw, roof:makeRoof(bx,by,dw,dh)});
     }
   }
@@ -359,11 +374,11 @@
     for(let i=0;i<posters.length;i++){
       const p=posters[i];
       for(const b of buildings){
-        const left = b.x - 460, right = b.x + b.dw + 460;
+        const left = b.x - 480, right = b.x + b.dw + 480;
         if(p.x>left && p.x<right) p.x = right + rndInt(80,160);
       }
-      for(const n of npcs){ if(Math.abs(p.x-n.x)<420) p.x = n.x + 440; }
-      if(i>0 && p.x - posters[i-1].x < 520) p.x = posters[i-1].x + 540;
+      for(const n of npcs){ if(Math.abs(p.x-n.x)<420) p.x = n.x + 460; }
+      if(i>0 && p.x - posters[i-1].x < 560) p.x = posters[i-1].x + 580;
       p.y = GROUND_Y - POSTER_SIZE;
     }
   }
@@ -384,6 +399,20 @@
     worldEndX = Math.max(maxB, maxP, maxN) + 1600;
   }
 
+  function spawnEndWall(){
+    if(!images.buildingWall) return;
+    const base = images.buildingWall[0]; if(!base) return;
+    const screenH = canvas.height/DPR;
+    const targetH = Math.round(screenH * 1.25);
+    const s = targetH / base.height;
+    const dw = Math.round(base.width * s);
+    const dh = Math.round(base.height* s);
+    const x = worldEndX - 800; // un peu avant la fin “logique”
+    const y = GROUND_Y - dh;
+    endWall = {frames:images.buildingWall, animT:0, x, y, dw, dh};
+    worldEndX = endWall.x - 8; // blocage
+  }
+
   /* ---------- modes ---------- */
   let mode='world', interiorOpenIdx=0, hacking=false, hackT=0, currentBuilding=null;
 
@@ -402,7 +431,7 @@
     mode='interior'; currentBuilding=b; cameraX=0; stopFoot();
     if(bgm) fadeTo(bgm,0.12,250);
     interiorOpenIdx=0; hacking=false; hackT=0;
-    player.x=60; player.y=6; player.vy=0; player.onGround=true; player.facing='right';
+    player.x=60; player.y=12; player.vy=0; player.onGround=true; player.facing='right'; // plus bas
   }
   function exitInterior(){
     mode='world';
@@ -420,12 +449,13 @@
     let x0=-Math.floor((cameraX*f)%dw); if(x0>0) x0-=dw;
     for(let x=x0;x<W;x+=dw) ctx.drawImage(img, Math.round(x), Math.round(y), dw, dh);
   }
-  function drawMyo(runVel, yOff){
+  function drawMyo(runVel, yOff, heightOverride=null){
     const frames=(Math.abs(runVel)>1e-2?images.myoWalk:images.myoIdle);
     const fps=(Math.abs(runVel)>1e-2?8:4);
     const idx=frames.length>1 ? Math.floor(player.animTime*fps)%frames.length : 0;
     const img=frames[idx] || images.myoIdle[0]; if(!img) return;
-    const s=MYO_H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
+    const targetH = heightOverride || MYO_H;
+    const s=targetH/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
     const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff;
 
     if(dashTimer>0 && images.dashTrail.length){
@@ -461,7 +491,6 @@
       const s=NPC_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
       const sy=GROUND_Y - dh + yOff + 2;
       const sx=Math.floor(n.x - cameraX);
-      // face flip pile au centre
       if(player.x < n.x) n.face='left'; else if(player.x > n.x) n.face='right';
       const idx=(Math.floor(n.animT*2)%2); const img=n.frames[Math.min(idx,n.frames.length-1)]||base;
 
@@ -470,7 +499,7 @@
       else ctx.drawImage(img,sx,sy,dw,dh);
       ctx.restore();
 
-      // Bulle: cycle
+      // bulle cyclique
       if(n.show){
         if(!n.dialogList || n.dialogList.length===0) n.dialogImg=null;
         if(!n.dialogImg && n.dialogList && n.dialogList.length){
@@ -487,15 +516,22 @@
       n.animT += 1/60;
     }
   }
+  function drawEndWall(yOff){
+    if(!endWall) return;
+    const frame=(Math.floor(endWall.animT*2)%2===0)? endWall.frames[0]:(endWall.frames[1]||endWall.frames[0]);
+    const sx=Math.floor(endWall.x - cameraX);
+    if(frame) ctx.drawImage(frame, sx, endWall.y + yOff, endWall.dw, endWall.dh);
+  }
 
   /* ---------- world loop ---------- */
-  let last=0, prevFeetY=0;
   function updateWorld(dt){
     let vx=0;
-    if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*MOVE_SPEED*DASH_MULT; dashTimer-=dt; }
+    const baseSpeed = MOVE_SPEED * (player.onGround || dashTimer>0 ? 1 : AIR_SPEED_MULT);
+
+    if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*baseSpeed*DASH_MULT; dashTimer-=dt; }
     else{
-      if(keys.has('ArrowRight')||keys.has('d')){ vx+=MOVE_SPEED; player.facing='right'; }
-      if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
+      if(keys.has('ArrowRight')||keys.has('d')){ vx+=baseSpeed; player.facing='right'; }
+      if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=baseSpeed; player.facing='left'; }
     }
     const nextX = player.x + vx*dt;
     player.x = Math.max(0, Math.min(nextX, worldEndX-10));
@@ -513,26 +549,26 @@
     }
 
     if(dashTimer<=0){ if(player.vy<0) player.vy+=GRAVITY_UP*dt; else player.vy+=GRAVITY_DOWN*dt; } else { player.vy=0; }
-    prevFeetY = GROUND_Y + player.y;
+    const prevFeetY = GROUND_Y + player.y;
     player.y += player.vy*dt;
 
     // sol
     if(GROUND_Y + player.y > GROUND_Y){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
 
-    // *** One-way roofs: on n'accroche QUE si on tombe d'au-dessus et qu'on traverse la ligne de toit ***
+    // one-way roofs (accroche en descendant, zone réduite)
     for(const b of buildings){
       const feetY = GROUND_Y + player.y;
       const top   = b.roof.y;
       const withinX = (player.x + PLAYER_HALF_W > b.roof.x) && (player.x - PLAYER_HALF_W < b.roof.x + b.roof.w);
-      const crossingDown = (player.vy>=0) && (prevFeetY <= top) && (feetY >= top);
+      const wasAbove = (prevFeetY <= top - 1);
+      const crossingDown = (player.vy>=0) && wasAbove && (feetY >= top);
       if( withinX && crossingDown ){
         player.y += (top - feetY);
         player.vy=0; player.onGround=true;
       }
-      // Sinon: si on vient du côté & on est au sol, on PASSE DEVANT (pas d'insertion horizontale)
     }
 
-    // PNJ: talk radius + bulles (disparition 1s après)
+    // PNJ talk
     for(const n of npcs){
       const near = Math.abs(player.x - n.x) <= NPC_TALK_RADIUS;
       if(near){ n.show=true; n.hideT=0; }
@@ -551,7 +587,7 @@
       if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; score++; scoreEl.textContent=String(score); if(sfx.wanted){sfx.wanted.currentTime=0; sfx.wanted.play().catch(()=>{});} } }
     }
 
-    // Entrée / portes (toute la largeur)
+    // Entrée / portes
     if(wantsCollect){
       for(const b of buildings){
         const atDoor = (player.x>b.doorX && player.x<b.doorX+b.doorW);
@@ -563,7 +599,7 @@
       }
     }
 
-    // caméra
+    // caméra (vertical follow léger)
     const W=canvas.width/DPR; cameraX=Math.max(0, player.x - W/2);
     const targetYOffset = -player.y * 0.18;
     camYOffset += (targetYOffset - camYOffset) * Math.min(1, dt*8);
@@ -582,17 +618,17 @@
 
     for(const b of buildings) b.animT+=dt;
     drawBuildings(yGround); drawPosters(yGround); drawNPCs(yGround); drawMyo(vx, yGround);
-
-    // fin visuelle (on garde le blocage worldEndX; mur graphique géré ailleurs si tu l'ajoutes)
+    if(endWall){ endWall.animT+=dt; drawEndWall(yGround); }
   }
 
-  /* ---------- interior loop (inchangé sauf zone + progression) ---------- */
+  /* ---------- interior loop ---------- */
   function updateInterior(dt){
     let vx=0;
-    if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*MOVE_SPEED*DASH_MULT; dashTimer-=dt; }
+    const baseSpeed = MOVE_SPEED * AIR_SPEED_MULT; // intérieur: mouvement agréable
+    if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*baseSpeed*DASH_MULT; dashTimer-=dt; }
     else{
-      if(keys.has('ArrowRight')||keys.has('d')){ vx+=MOVE_SPEED; player.facing='right'; }
-      if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=MOVE_SPEED; player.facing='left'; }
+      if(keys.has('ArrowRight')||keys.has('d')){ vx+=baseSpeed; player.facing='right'; }
+      if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=baseSpeed; player.facing='left'; }
     }
     player.x=Math.max(0, Math.min(1220, player.x + vx*dt));
 
@@ -608,12 +644,12 @@
 
     const floorY=650, ceilY=120;
     if(floorY + player.y > floorY){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
-    const headY = floorY - MYO_H + player.y; if(headY<ceilY){ player.y+=(ceilY-headY); player.vy=0; }
+    const headY = floorY - MYO_H_INTERIOR + player.y; if(headY<ceilY){ player.y+=(ceilY-headY); player.vy=0; }
 
     if(player.x<=0 && !hacking){ exitInterior(); return; }
 
     const wantsCollect=keys.has('ArrowDown')||keys.has('s');
-    const termX0=Math.floor(1280*0.75); // dernier quart
+    const W=canvas.width/DPR, termX0=Math.floor(W*0.75); // dernier 1/4 (plus large vers la gauche)
     if(!hacking && wantsCollect && player.x>=termX0){
       hacking=true; hackT=0; if(sfx.type){ sfx.type.currentTime=0; sfx.type.play().catch(()=>{}); }
     }
@@ -624,11 +660,11 @@
         if(sfx.ding){ sfx.ding.currentTime=0; sfx.ding.play().catch(()=>{}); }
         if(currentBuilding && !hackedIds.has(currentBuilding.id)){
           hackedIds.add(currentBuilding.id);
-          eggIndex = Math.min(10, eggIndex+1);
+          eggIndex = Math.min(10, eggIndex+1); // progression 1→10
           localStorage.setItem('io83_egg_index', String(eggIndex));
           localStorage.setItem('io83_hacked_ids', JSON.stringify([...hackedIds]));
         }
-        interiorOpenIdx=Math.max(1, eggIndex);
+        interiorOpenIdx=Math.max(1, eggIndex); // affiche open_1 puis 2, etc.
       }
     }
 
@@ -647,13 +683,14 @@
       if(base) ctx.drawImage(base,0,0,Wpx,Hpx);
     }
 
+    // Myo plus grand & plus bas
     const frames2=(Math.abs(vx)>1e-2?images.myoWalk:images.myoIdle);
     const fps=(Math.abs(vx)>1e-2?8:4);
     const idx2=frames2.length>1 ? Math.floor(player.animTime*fps)%frames2.length : 0;
     const img2=frames2[idx2]||images.myoIdle[0];
     if(img2){
-      const s=MYO_H/img2.height, dw=Math.round(img2.width*s), dh=Math.round(img2.height*s);
-      const x=Math.floor(player.x), y=floorY - dh + player.y + 2;
+      const s=MYO_H_INTERIOR/img2.height, dw=Math.round(img2.width*s), dh=Math.round(img2.height*s);
+      const x=Math.floor(player.x), y=floorY - dh + player.y + 10; // encore un peu plus bas
       ctx.save(); if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img2,0,0,dw,dh); } else ctx.drawImage(img2,x,y,dw,dh); ctx.restore();
     }
   }
