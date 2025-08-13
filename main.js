@@ -607,6 +607,19 @@ if(dashTimer<=0){
 } else {
   player.vy = 0;
 }
+    
+// --- Apply vertical movement & ground clamp (NE PAS SUPPRIMER) ---
+const prevFeet = GROUND_Y + player.y;      // <-- utilisé par les toits
+player.y += player.vy * dt;
+
+// Sol monde (clamp)
+if (GROUND_Y + player.y > GROUND_Y) {
+  player.y = 0;
+  player.vy = 0;
+  player.onGround = true;
+} else {
+  player.onGround = false;
+}
 
 
     // Toits one-way + ↓
