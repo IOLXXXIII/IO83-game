@@ -91,7 +91,8 @@
     ],
     buildingKaito:['assets/buildings/building_kaito_idle_1.png'+CB,'assets/buildings/building_kaito_idle_2.png'+CB],
     buildingWall:['assets/buildings/building_wall_idle_1.png'+CB,'assets/buildings/building_wall_idle_2.png'+CB],
-    dashTrail:['assets/fx/dash_trail_1.png'+CB,'assets/fx/dash_trail_2.png'+CB,'assets/fx/dash_trail_3.png'+CB],
+    dashTrail: Array.from({length:8}, (_,i)=>`assets/fx/dash_trail_${i+1}.png${CB}`),
+    jumpDust : Array.from({length:16},(_,i)=>`assets/fx/jump_dust_${i+1}.png${CB}`),
     interiorClosedIdle:['assets/interiors/interior_closed_idle_1.png'+CB,'assets/interiors/interior_closed_idle_2.png'+CB],
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
     postersCompletePNG:'assets/ui/posters_complete.png'+CB
@@ -102,7 +103,8 @@
     npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
     dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
     buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
-    interiorClosedIdle:[], interiorOpens:[], postersComplete:null
+    interiorClosedIdle:[], interiorOpens:[], postersComplete:null, jumpDust:[]
+
   };
   const loadImg=src=>new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; });
 
@@ -124,6 +126,42 @@
   const DASH_WINDOW=0.22, DASH_DUR=0.18, DASH_COOL_G=0.6, DASH_COOL_A=0.28, DASH_MULT=4;
   let lastTapL=-999,lastTapR=-999,dashTimer=0,dashCooldown=0,airDashUsed=0;
 
+  /* ========== Camera lookahead & micro shake ========== */
+const LOOKAHEAD_MAX = 140;     // px max
+const LOOK_SMOOTH   = 8;       // suivi (plus grand = plus rapide)
+const LOOK_DASH_BONUS = 40;    // petit bonus pendant dash
+let camLookX = 0;              // valeur lissée du lookahead X
+let shakeAmp = 0;              // amplitude écran
+function addShake(s){ shakeAmp = Math.min(6, shakeAmp + s); }
+
+/* ========== Variable jump (tap court / long) ========== */
+let jumpHeld = false;          // vrai tant que ↑ (ou W) est maintenu
+const JUMP_CUT_MULT = 2.2;     // gravité supplémentaire si on relâche tôt
+
+/* ========== FX poussière ========== */
+const fx=[]; // {x,y,t}
+const DUST_FPS = 24;
+function spawnDust(x,y){
+  if(!images.jumpDust.length) return;
+  fx.push({x,y,t:0});
+}
+function drawFX(yOff){
+  if(!images.jumpDust.length) return;
+  for(let i=fx.length-1;i>=0;i--){
+    const f=fx[i];
+    f.t += 1/60;
+    const idx = Math.floor(f.t * DUST_FPS);
+    if(idx >= images.jumpDust.length){ fx.splice(i,1); continue; }
+    const img = images.jumpDust[idx];
+    const s = 1; // échelle 1:1 (sprites déjà ajustés)
+    const dw = Math.round(img.width * s);
+    const dh = Math.round(img.height* s);
+    const sx = Math.round(f.x - cameraX - dw/2);
+    const sy = Math.round(f.y + yOff - dh);
+    ctx.drawImage(img, sx, sy, dw, dh);
+  }
+}
+  
   // Toits
   let onPlatform=false, dropThrough=0; let downPressedEdge=false;
 
@@ -134,12 +172,13 @@
     if(e.repeat){ keys.add(e.key); return; }
     keys.add(e.key);
     if(e.key==='ArrowDown'||e.key==='s') downPressedEdge=true;
-    if(e.key==='ArrowUp'||e.key==='w')   jumpBuf=JUMP_BUFFER;
+    if(e.key==='ArrowUp'||e.key==='w'){  jumpBuf=JUMP_BUFFER; jumpHeld=true; }
     const t=performance.now()/1000;
     if(e.key==='ArrowRight'||e.key==='d'){ if(t-lastTapR<=DASH_WINDOW) tryDash('right'); lastTapR=t; }
     if(e.key==='ArrowLeft' ||e.key==='a'){ if(t-lastTapL<=DASH_WINDOW) tryDash('left');  lastTapL=t; }
   });
   addEventListener('keyup',e=>{ if(!worldReady) return; keys.delete(e.key); });
+  if(e.key==='ArrowUp'||e.key==='w') jumpHeld=false;
 
   const player={x:0,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
 
@@ -216,6 +255,7 @@
     { const ka=await L(ASSETS.buildingKaito[0]); const kb=ka? await L(ASSETS.buildingKaito[1]):null; images.buildingKaito=ka?[ka,kb||ka]:null; }
     { const wa=await L(ASSETS.buildingWall[0]); const wb=wa? await L(ASSETS.buildingWall[1]):null; images.buildingWall=wa?[wa,wb||wa]:null; }
     for(const s of ASSETS.dashTrail){ const i=await L(s); if(i) images.dashTrail.push(i); }
+    for(const s of ASSETS.jumpDust){ const i=await L(s); if(i) images.jumpDust.push(i); }
     for(const s of ASSETS.interiorClosedIdle){ const i=await L(s); if(i) images.interiorClosedIdle.push(i); }
     for(const s of ASSETS.interiorOpens){ const i=await L(s); if(i) images.interiorOpens.push(i); }
     images.postersComplete = await L(ASSETS.postersCompletePNG);
@@ -513,6 +553,9 @@ function buildWorld(){
   let mode='world', interiorOpenIdx=0, hacking=false, hackT=0, currentB=null;
 
   function updateWorld(dt){
+    const wasOnGround = player.onGround;
+    const vyBefore = player.vy;
+
     let vx=0;
     const base=MOVE_SPEED*(player.onGround || dashTimer>0 ? 1 : AIR_SPEED_MULT);
 
