@@ -599,7 +599,7 @@ function buildWorld(){
   function updateInterior(dt){
     const W=canvas.width/DPR, H=canvas.height/DPR;
     // >>> plus de headroom : sol plus bas, plafond reculé
-    const floorY=H-16, ceilY=-60;
+    const floorY=H-48, ceilY=-300;
 
     let vx=0; const base=MOVE_SPEED*AIR_SPEED_MULT;
     if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*base*DASH_MULT; dashTimer-=dt; }
