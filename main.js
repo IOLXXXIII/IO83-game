@@ -165,21 +165,24 @@ function drawFX(yOff){
   // Toits
   let onPlatform=false, dropThrough=0; let downPressedEdge=false;
 
-  const keys=new Set();
-  addEventListener('keydown',e=>{
-    if(!worldReady || (mode!=='world' && mode!=='interior')) return;
-    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'].includes(e.key)) e.preventDefault();
-    if(e.repeat){ keys.add(e.key); return; }
-    keys.add(e.key);
-    if(e.key==='ArrowDown'||e.key==='s') downPressedEdge=true;
-    if(e.key==='ArrowUp'||e.key==='w'){  jumpBuf=JUMP_BUFFER; jumpHeld=true; }
-    const t=performance.now()/1000;
-    if(e.key==='ArrowRight'||e.key==='d'){ if(t-lastTapR<=DASH_WINDOW) tryDash('right'); lastTapR=t; }
-    if(e.key==='ArrowLeft' ||e.key==='a'){ if(t-lastTapL<=DASH_WINDOW) tryDash('left');  lastTapL=t; }
-  });
-  addEventListener('keyup',e=>{ if(!worldReady) return; keys.delete(e.key); });
+const keys=new Set();
+addEventListener('keydown',e=>{
+  if(!worldReady || (mode!=='world' && mode!=='interior')) return;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'].includes(e.key)) e.preventDefault();
+  if(e.repeat){ keys.add(e.key); return; }
+  keys.add(e.key);
+  if(e.key==='ArrowDown'||e.key==='s') downPressedEdge=true;
+  if(e.key==='ArrowUp'||e.key==='w'){  jumpBuf=JUMP_BUFFER; jumpHeld=true; }
+  const t=performance.now()/1000;
+  if(e.key==='ArrowRight'||e.key==='d'){ if(t-lastTapR<=DASH_WINDOW) tryDash('right'); lastTapR=t; }
+  if(e.key==='ArrowLeft' ||e.key==='a'){ if(t-lastTapL<=DASH_WINDOW) tryDash('left');  lastTapL=t; }
+});
+addEventListener('keyup',e=>{
+  if(!worldReady) return;
+  keys.delete(e.key);
   if(e.key==='ArrowUp'||e.key==='w') jumpHeld=false;
-
+});
+  
   const player={x:0,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
 
   /* ========== Posters ========== */
@@ -546,7 +549,7 @@ function buildWorld(){
       if(airDashUsed>=max) return;
       airDashUsed++; dashCooldown=DASH_COOL_A;
     }else{ airDashUsed=0; dashCooldown=DASH_COOL_G; }
-    dashTimer=DASH_DUR; player.facing=dir; sfx.dash?.play().catch(()=>{});
+    dashTimer=DASH_DUR; player.facing=dir; addShake(1.0); sfx.dash?.play().catch(()=>{});
   }
 
   /* ========== Loops ========== */
@@ -573,17 +576,38 @@ function buildWorld(){
     jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
     if(dropThrough>0) dropThrough=Math.max(0,dropThrough-dt);
 
-    // Jump
-    if(jumpBuf>0){
-      if(player.onGround || coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
-      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
-    }
-    // Gravity
-    if(dashTimer<=0){ if(player.vy<0) player.vy+=GRAVITY_UP*dt; else player.vy+=GRAVITY_DOWN*dt; } else player.vy=0;
+// Jump (variable height + FX)
+if(jumpBuf>0){
+  if(player.onGround || coyote>0){
+    player.vy = -JUMP_VELOCITY;
+    player.onGround = false;
+    jumpBuf = 0;
+    spawnDust(player.x, GROUND_Y + player.y);
+    addShake(0.8);
+    sfx.jump?.play().catch(()=>{});
+  } else if(airJumpsUsed < AIR_JUMPS){
+    airJumpsUsed++;
+    player.vy = -JUMP_VELOCITY;
+    jumpBuf = 0;
+    spawnDust(player.x, GROUND_Y + player.y);
+    addShake(0.6);
+    sfx.jump?.play().catch(()=>{});
+  }
+}
 
-    const prevFeet=GROUND_Y+player.y;
-    player.y += player.vy*dt;
-    if(GROUND_Y+player.y>GROUND_Y){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
+// Gravity (variable jump height)
+if(dashTimer<=0){
+  if(player.vy<0){
+    let g = GRAVITY_UP;
+    if(!jumpHeld) g *= JUMP_CUT_MULT; // relâché tôt -> saut plus court
+    player.vy += g*dt;
+  } else {
+    player.vy += GRAVITY_DOWN*dt;
+  }
+} else {
+  player.vy = 0;
+}
+
 
     // Toits one-way + ↓
     onPlatform=false;
@@ -608,6 +632,14 @@ function buildWorld(){
       }
     }
 
+// Landing FX (transition air -> sol)
+if(!wasOnGround && player.onGround){
+  const impact = Math.min(4, Math.abs(vyBefore)/600);
+  addShake(impact>0.6 ? impact : 0.6);
+  spawnDust(player.x, GROUND_Y + player.y);
+}
+
+    
     // PNJ talk
     for(const n of npcs){
       const near=Math.abs(player.x-n.x)<=NPC_TALK_RADIUS;
@@ -645,9 +677,28 @@ function buildWorld(){
       }
     }
 
-    // Caméra
-    const W=canvas.width/DPR; cameraX=Math.max(0, player.x - W/2);
-    const targetY=-player.y*0.18; camYOffset += (targetY-camYOffset)*Math.min(1,dt*8);
+// Caméra (lookahead + micro shake)
+const W=canvas.width/DPR;
+const speedRatio = Math.min(1, Math.abs(vx)/MOVE_SPEED);
+const sign = (player.facing==='right') ? 1 : -1;
+const lookTarget = sign * (LOOKAHEAD_MAX*speedRatio + (dashTimer>0?LOOK_DASH_BONUS:0));
+camLookX += (lookTarget - camLookX) * Math.min(1, dt*LOOK_SMOOTH);
+
+// shake decay + offsets
+shakeAmp *= 0.88;
+const shX = (Math.random()*2-1) * shakeAmp;
+const shY = (Math.random()*2-1) * (shakeAmp*0.6);
+
+// X
+let camXTarget = player.x + camLookX - W/2;
+camXTarget = Math.max(0, Math.min(camXTarget, Math.max(0, worldEndX - W)));
+cameraX = camXTarget + shX;
+
+// Y doux + shake
+const targetY = -player.y*0.18;
+camYOffset += (targetY - camYOffset) * Math.min(1,dt*8);
+camYOffset += shY;
+
 
     // Draw
     player.state=Math.abs(vx)>1e-2?'walk':'idle'; player.animTime+=dt;
@@ -658,7 +709,7 @@ function buildWorld(){
     if(images.mid)   drawLayer(images.mid, 0.45,6,yM);
     if(images.front) drawLayer(images.front,1.00,6,yG);
     for(const b of buildings) b.animT+=dt;
-    drawBuildings(yG); drawPosters(yG); drawNPCs(yG); drawMyo(vx,yG);
+    drawBuildings(yG); drawPosters(yG); drawNPCs(yG); drawFX(yG); drawMyo(vx,yG);
     if(endWall){ endWall.animT+=dt; drawEndWall(yG); }
 
     downPressedEdge=false;
@@ -697,7 +748,16 @@ function buildWorld(){
       if(player.onGround||coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
       else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
     }
-    if(dashTimer<=0){ if(player.vy<0) player.vy+=GRAVITY_UP*dt; else player.vy+=GRAVITY_DOWN*dt; } else player.vy=0;
+    if(dashTimer<=0){
+  if(player.vy<0){
+    let g = GRAVITY_UP;
+    if(!jumpHeld) g *= JUMP_CUT_MULT;
+    player.vy += g*dt;
+  } else {
+    player.vy += GRAVITY_DOWN*dt;
+  }
+} else player.vy=0;
+
     player.y += player.vy*dt;
     if(floorY+player.y>floorY){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
     const head=floorY - MYO_H_INTERIOR + player.y; if(head<ceilY){ player.y+=(ceilY-head); player.vy=0; }
