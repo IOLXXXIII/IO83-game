@@ -248,241 +248,160 @@
     return found;
   }
 
-  function buildWorld(){
-    // Map compacte en 10 blocs : 3 bâtiments + 1 PNJ + 1 poster par bloc (si place)
-    buildings.length = 0;
-    npcs.length = 0;
-    posters.length = 0;
+function buildWorld(){
+  // Réinit
+  buildings.length = 0;
+  npcs.length = 0;
+  posters.length = 0;
 
-    const NUM_BLOCKS = 10;
-    const INTRA_GAP_MIN = 28, INTRA_GAP_MAX = 64;
-    const INTER_GAP_MIN = 280, INTER_GAP_MAX = 520;
+  const NUM_BLOCKS = 10;
 
-    // ---------- Génération des blocs ----------
-    let x = worldStartX;
-    const blockRects = []; // {xL, xR, mid}
+  // Gaps (entre b0-b1 et b1-b2) – on garantit la place pour 1 poster et 1 PNJ
+  const GAP_POSTER_MIN = 200;          // >= poster 120 + marge sécurité
+  const GAP_POSTER_MAX = 280;
+  const GAP_NPC_MIN    = 280;          // >= ~200 de largeur PNJ + marge
+  const GAP_NPC_MAX    = 360;
 
-    for (let b = 0; b < NUM_BLOCKS; b++) {
-      // composition stricte : 3 bâtiments (1 ouvrable (2/3), 2 fermés (1/4))
-      const openType = (Math.random() < 0.5) ? 2 : 3;
-      const closedCombo = [[1,4],[1,1],[4,4]][rint(0,2)];
-      const types = [openType, closedCombo[0], closedCombo[1]];
-      for (let i = types.length - 1; i > 0; i--) { const j = rint(0,i); const tmp=types[i]; types[i]=types[j]; types[j]=tmp; }
+  const INTER_GAP_MIN = 320;           // écart entre blocs (rendu compact mais safe)
+  const INTER_GAP_MAX = 560;
 
-      let firstX = x;
-      for (let i = 0; i < 3; i++) {
-        const wanted = types[i];
-        let pair = images.buildings.find(bi => bi[2] === wanted) || images.buildings[0];
-        const [im1, im2, typeId] = pair;
+  // Bloc Kaito (0-based) : Kaito + son bâtiment dans le même bloc
+  const KAITO_BLOCK = Math.min(5, NUM_BLOCKS-1);
 
-        const s  = BUILDING_TARGET_H / im1.height;
-        const dw = Math.round(im1.width * s);
-        const dh = Math.round(im1.height * s);
-        const bx = x, by = GROUND_Y - dh;
-        const roof = makeRoof(bx, by, dw, dh);
+  let x = worldStartX;
+  const blockRects = [];
 
-        const canEnter = (typeId === 2 || typeId === 3);
-        buildings.push({
-          id: nextBId++,
-          typeId,
-          frames: [im1, im2 || im1],
-          animT: 0,
-          x: bx, y: by, dw, dh,
-          roof,
-          doorX: bx, doorW: dw,
-          canEnterPossible: canEnter,
-          canEnterAlways: canEnter // ouvrable systématique
-        });
-
-        x += dw + rint(INTRA_GAP_MIN, INTRA_GAP_MAX);
-      }
-
-      const last = buildings.at(-1);
-      const xL = firstX;
-      const xR = last.x + last.dw;
-      const mid = Math.round((xL + xR) / 2);
-      blockRects.push({ xL, xR, mid });
-
-      x += rint(INTER_GAP_MIN, INTER_GAP_MAX);
-    }
-      // Intervalles d’exclusion globaux (anti-chevauchement total)
-  const forbid = buildings.map(b => [b.x - 520, b.x + b.dw + 520]);
-  const reserve = (x0, w, extra=260) => { forbid.push([x0 - extra, x0 + w + extra]); };
-
-  // Place un x "au plus près", en poussant vers la droite sans jamais tomber dans une zone interdite
-  function placeInGapsClamp(x, w, step=120){
-    // tri par borne gauche
-    const sorted=[...forbid].sort((a,b)=>a[0]-b[0]);
-    let tries=0;
-    while(tries++<400){
-      let hit=false;
-      for(const [L,R] of sorted){
-        if(x < R && x + w > L){ x = R + step; hit=true; break; }
-      }
-      if(!hit) break;
-    }
-    return x;
-  }
-    
-  // ---------- Réserve Kaito : son bâtiment au bloc 6, Kaito au bloc 7 ----------
-  // (indices 0-based → blocs #5 et #6)
-  const kaitoBlockBld = Math.min(5, NUM_BLOCKS - 2);
-  const kaitoBlockNPC = Math.min(6, NUM_BLOCKS - 1);
-
-  // Helpers: intervals dans un bloc et calcul d’espaces libres (sans superpositions)
-  function blockBuildingIntervals(block, extra=280){
-    const out=[];
-    for(const bld of buildings){
-      const L=bld.x, R=bld.x+bld.dw;
-      if(R<block.xL || L>block.xR) continue;       // pas dans ce bloc
-      out.push([L-extra, R+extra]);
-    }
-    out.sort((a,b)=>a[0]-b[0]);
-    // fusion
-    const merged=[];
-    for(const seg of out){
-      if(!merged.length || seg[0] > merged[merged.length-1][1]) merged.push(seg);
-      else merged[merged.length-1][1] = Math.max(merged[merged.length-1][1], seg[1]);
-    }
-    return merged;
-  }
-  function subtractSpan([a,b],[c,d]){
-    if(d<=a || c>=b) return [[a,b]];         // disjoint
-    const res=[];
-    if(c>a) res.push([a, Math.max(a, c)]);
-    if(d<b) res.push([Math.min(b, d), b]);
-    return res.filter(seg=>seg[1]-seg[0]>8);
-  }
-  function freeSpansInBlock(block, margin=280){
-    let spans=[[block.xL+margin, block.xR-margin]];
-    const cuts=blockBuildingIntervals(block, margin);
-    for(const cut of cuts){
-      const next=[];
-      for(const sp of spans) next.push(...subtractSpan(sp, cut));
-      spans=next;
-      if(!spans.length) break;
-    }
-    return spans;
-  }
-  function pickXFromSpans(spans, w, prefer){
-    if(!spans.length) return null;
-    // Si une préférence est donnée (milieu du bloc), essaye d’y coller
-    if(typeof prefer==='number'){
-      // trouve le span qui contient 'prefer'
-      for(const [L,R] of spans){
-        if(prefer>=L && prefer<=R){
-          const maxX=Math.max(L, Math.min(R-w, prefer));
-          return Math.max(L, Math.min(maxX, prefer));
-        }
-      }
-    }
-    // sinon random sur un span au hasard
-    const s=spans[Math.floor(Math.random()*spans.length)];
-    const L=s[0], R=s[1];
-    if(R-L<=w) return null;
-    return Math.floor(rnd(L, R-w));
-  }
-  function addLocalForbid(spans, x, w, pad=260){
-    // Retire de 'spans' la fenêtre [x-pad, x+w+pad]
-    const cut=[x-pad, x+w+pad];
-    const next=[];
-    for(const sp of spans) next.push(...subtractSpan(sp, cut));
-    return next;
-  }
-
-  // ---------- Bâtiment Kaito (immédiatement avant Kaito) ----------
-  // On INSÈRE son bâtiment après la génération des 3 bâtiments par bloc (donc il s’ajoute)
-  if (images.buildingKaito) {
-    const base = images.buildingKaito[0];
-    const s  = BUILDING_TARGET_H / base.height;
-    const dw = Math.round(base.width * s);
-    const dh = Math.round(base.height * s);
-
-    const block = blockRects[kaitoBlockBld];
-
-    // Place Kaito building au plus près du centre du bloc, sans chevauchement global
-    // (nécessite reserve() et placeInGapsClamp() ajoutés plus haut)
-    let prefer = Math.round(block.mid - 220);
-    let bx = placeInGapsClamp(prefer - dw, dw, 160);
-
-    const by = GROUND_Y - dh;
-    const roof = makeRoof(bx, by, dw, dh);
-
-    buildings.push({
-      id: nextBId++, typeId: 98,
-      frames: [images.buildingKaito[0], images.buildingKaito[1] || images.buildingKaito[0]],
-      animT: 0, x: bx, y: by, dw, dh, roof,
-      doorX: bx, doorW: dw,
-      canEnterPossible: false
-    });
-
-    // Réserve l’espace pour empêcher tout recouvrement futur
-    reserve(bx, dw, 420);
-  }
-
-
-  // ---------- PNJ : 1 par bloc (Aeron tôt, Kaito bloc suivant) ----------
-  const firstThird = Math.max(1, Math.floor(NUM_BLOCKS / 3));
-  let aeronPlaced = false;
-
+  // ——— Génération des blocs : 3 bâtiments + 1 PNJ + 1 poster par bloc ———
   for (let b = 0; b < NUM_BLOCKS; b++) {
-    const block = blockRects[b];
-    // Choix type
-    let type='kahikoans';
-    if (!aeronPlaced && b < firstThird) { type='aeron'; aeronPlaced=true; }
-    else if (Math.random()<0.40)        { type='maonis'; }
-    if (b===kaitoBlockNPC)              { type='kaito'; }
 
-    // Spans libres dans le bloc (sans chevaucher les bâtiments)
-    let spans = freeSpansInBlock(block, 280);
-    let px = pickXFromSpans(spans, 200, block.mid + rint(-140,140));
-    if(px===null){
-      for(const m of [240,200,160,120,80]){
-        spans = freeSpansInBlock(block, m);
-        px = pickXFromSpans(spans, 200, block.mid);
-        if(px!==null) break;
-      }
-    }
-    if (px!==null){
-      npcs.push({ type, x:px, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
-    }
-  }
+    const firstX = x;
 
-  // ---------- Posters : 1 par bloc (au sol), sans chevaucher PNJ du bloc ----------
-  for (let b = 0; b < NUM_BLOCKS; b++) {
-    const block = blockRects[b];
-    // spans libres vs bâtiments
-    let spans = freeSpansInBlock(block, 280);
+    // Composition des 3 bâtiments du bloc
+    // Règle globale: exactement 1 ouvrable (2 ou 3) + 2 fermés (1/4)
+    const openType = (Math.random()<0.5) ? 2 : 3;
 
-    // évite chevauchement avec le PNJ du bloc (si présent)
-    const npcHere = npcs.find(n=> n.x>=block.xL && n.x<=block.xR);
-    if(npcHere){
-      // retire une bande autour du PNJ
-      spans = addLocalForbid(spans, npcHere.x-100, 200, 220);
-    }
+    // Cas général (pas Kaito): deux fermés au hasard (1/4)
+    let closedPool = (Math.random()<0.5) ? [1,4] : (Math.random()<0.5 ? [1,1] : [4,4]);
 
-    const px = pickXFromSpans(spans, POSTER_SIZE, block.mid + rint(-120,120));
-    if (px!==null){
-      posters.push({ x:px, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
+    // Cas spécial Kaito : on force le triplet à [fermé, Kaito, ouvrable]
+    // => Le bloc a quand même son bâtiment 2/3, ET Kaito est au milieu
+    let triplet;
+    if (images.buildingKaito && b === KAITO_BLOCK) {
+      // un fermé au hasard (1 ou 4)
+      const closedPick = (Math.random()<0.5) ? 1 : 4;
+      triplet = [closedPick, 98 /*Kaito*/, openType];
     } else {
-      // fallback: si vraiment pas de place, on le met côté gauche du bloc, marges réduites (jamais *dans* un bâtiment)
-      let fallback = freeSpansInBlock(block, 80);
-      const p2 = pickXFromSpans(fallback, POSTER_SIZE, block.xL+120);
-      if(p2!==null) posters.push({ x:p2, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
-      // sinon on skip ce bloc (cas ultra rare)
+      triplet = [openType, closedPool[0], closedPool[1]];
+      // mélanger pour varier
+      for (let i=triplet.length-1;i>0;i--){ const j=rint(0,i); const t=triplet[i]; triplet[i]=triplet[j]; triplet[j]=t; }
     }
+
+    // On décidera quel gap sert au poster et lequel au PNJ.
+    // Si bloc Kaito, on impose que le PNJ soit à droite du building Kaito -> gap après l’index 1.
+    const gapRoles = (b === KAITO_BLOCK) ? ['poster','npc']   // gap après b0 = poster, gap après b1 = PNJ (donc à droite de Kaito au centre)
+                                          : (Math.random()<0.5 ? ['poster','npc'] : ['npc','poster']);
+
+    // Place les 3 bâtiments en garantissant des gaps assez larges entre b0-b1 et b1-b2
+    const placedThisBlock = []; // {x,dw,typeId}
+    for (let i=0;i<3;i++){
+      let typeId = triplet[i];
+      let im1, im2, dw, dh;
+
+      if (typeId === 98 && images.buildingKaito) {
+        const base = images.buildingKaito[0];
+        const s  = BUILDING_TARGET_H / base.height;
+        dw = Math.round(base.width * s);
+        dh = Math.round(base.height * s);
+        im1 = images.buildingKaito[0];
+        im2 = images.buildingKaito[1] || im1;
+      } else {
+        const pair = images.buildings.find(e => e[2]===typeId) || images.buildings[0];
+        const base = pair[0];
+        const s  = BUILDING_TARGET_H / base.height;
+        dw = Math.round(base.width * s);
+        dh = Math.round(base.height * s);
+        im1 = pair[0];
+        im2 = pair[1] || pair[0];
+      }
+
+      const bx = x;
+      const by = GROUND_Y - dh;
+      const roof = makeRoof(bx, by, dw, dh);
+
+      buildings.push({
+        id: nextBId++,
+        typeId,
+        frames: [im1, im2],
+        animT: 0,
+        x: bx, y: by, dw, dh,
+        roof,
+        doorX: bx, doorW: dw,
+        canEnterPossible: (typeId===2 || typeId===3) // Kaito (98) non ouvrable
+      });
+
+      placedThisBlock.push({x:bx, dw, typeId});
+      const isLast = (i===2);
+      if (!isLast){
+        // Calcul du gap après ce bâtiment
+        const role = gapRoles[i]; // 'poster' ou 'npc'
+        const minW = (role==='poster') ? GAP_POSTER_MIN : GAP_NPC_MIN;
+        const maxW = (role==='poster') ? GAP_POSTER_MAX : GAP_NPC_MAX;
+        const gapW = rint(minW, maxW);
+        x = bx + dw + gapW; // on crée réellement la place
+      }
+      else{
+        // Fin du bloc → gap inter-bloc
+        x += rint(INTER_GAP_MIN, INTER_GAP_MAX);
+      }
+    }
+
+    // Définition rectangle du bloc
+    const lastPlaced = placedThisBlock[placedThisBlock.length-1];
+    const xL = firstX;
+    const xR = x; // après le dernier + inter-gap
+    const mid = Math.round((xL + (lastPlaced.x + lastPlaced.dw)) / 2);
+    blockRects.push({xL,xR,mid});
+
+    // — Place le POSTER et le PNJ précisément dans les deux gaps créés —
+    // Gaps réels : entre [b0] et [b1], puis entre [b1] et [b2]
+    const gap01L = placedThisBlock[0].x + placedThisBlock[0].dw;
+    const gap01R = placedThisBlock[1].x;
+    const gap12L = placedThisBlock[1].x + placedThisBlock[1].dw;
+    const gap12R = placedThisBlock[2].x;
+
+    const roleAfter0 = gapRoles[0]; // rôle du gap entre b0 et b1
+    const roleAfter1 = gapRoles[1]; // rôle du gap entre b1 et b2
+
+    const placePosterInGap = (L,R)=>{
+      const w = POSTER_SIZE;
+      const cx = (L+R)/2;
+      const px = Math.round(cx - w/2);
+      posters.push({ x:px, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
+    };
+    const placeNPCInGap = (L,R, type)=>{
+      const npcW = 200;                 // largeur “logique” pour l’emprise au sol
+      const cx = (L+R)/2;
+      const nx = Math.round(cx - npcW/2);
+      npcs.push({ type, x:nx, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
+    };
+
+    // Choix du PNJ de ce bloc (Aeron tôt, sinon Maonis/Kahikoans, et Kaito si bloc Kaito)
+    const firstThird = Math.max(1, Math.floor(NUM_BLOCKS/3));
+    let npcType = 'kahikoans';
+    // place Aeron dans le premier tiers (une seule fois)
+    if (!buildWorld._aeronPlaced && b < firstThird) { npcType='aeron'; buildWorld._aeronPlaced = true; }
+    else if (Math.random()<0.40)                     { npcType='maonis'; }
+    if (b === KAITO_BLOCK)                           { npcType='kaito'; } // bloc Kaito → PNJ = Kaito
+
+    // Affectation gap → éléments
+    if (roleAfter0 === 'poster') placePosterInGap(gap01L,gap01R);
+    else                         placeNPCInGap(gap01L,gap01R, npcType);
+
+    if (roleAfter1 === 'poster') placePosterInGap(gap12L,gap12R);
+    else                         placeNPCInGap(gap12L,gap12R, npcType);
   }
 
-  // ---------- Position précise du PNJ Kaito à droite de son bâtiment ----------
-  // (remplace si la boucle PNJ l’a créé ailleurs)
-  const kaitoBuilding = buildings.find(bd=>bd.typeId===98);
-  if(kaitoBuilding && images.npcs?.kaito?.length){
-    for(let i=npcs.length-1;i>=0;i--) if(npcs[i].type==='kaito') npcs.splice(i,1);
-    const kx = kaitoBuilding.x + kaitoBuilding.dw + 180; // 180 px à droite du building Kaito
-    npcs.push({ type:'kaito', x:kx, frames:images.npcs.kaito, animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
-  }
-
-  // ---------- Mur de fin juste après le dernier bloc ----------
+  // Mur de fin juste après le dernier bloc
   worldEndX = Math.max(
     ...buildings.map(b => b.x + b.dw),
     ...posters.map(p => p.x + p.w),
@@ -490,7 +409,7 @@
   ) + 1200;
 
   spawnEndWall();
- } // <<<<<< FIN buildWorld()
+} // <<<<<< FIN buildWorld()
 
   function spawnEndWall(){
     if(!images.buildingWall) return;
