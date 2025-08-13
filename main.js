@@ -247,132 +247,140 @@
   }
 
 function buildWorld(){
+  // Map compacte en 10 blocs : pour chaque bloc → 2–3 bâtiments + 1 PNJ + 1 poster.
   buildings.length = 0;
+  npcs.length = 0;
+  posters.length = 0;
 
-  // 1) Génère ~62 bâtiments (même logique qu’avant)
+  const NUM_BLOCKS = 10;                 // 10 blocs → 10 posters exactement
+  const INTRA_GAP_MIN = 28, INTRA_GAP_MAX = 64;   // écart entre bâtiments d’un même bloc
+  const INTER_GAP_MIN = 280, INTER_GAP_MAX = 520; // écart entre blocs (beaucoup plus court qu’avant)
+
+  // ---------- Génération des blocs ----------
   let x = worldStartX;
-  const minBuildings = 62;
-  while (buildings.length < minBuildings) {
-    const cluster = (Math.random() < 0.65) ? rint(2,3) : 1;
-    for (let i=0;i<cluster;i++){
+  const blockRects = []; // {xL, xR, mid}
+
+  for (let b = 0; b < NUM_BLOCKS; b++) {
+    const count = rint(2, 3); // 2 ou 3 bâtiments par bloc
+    let firstX = x;
+
+    for (let i = 0; i < count; i++) {
       const [im1, im2, typeId] = pickBuildingFrameWeighted();
       const s  = BUILDING_TARGET_H / im1.height;
       const dw = Math.round(im1.width * s);
       const dh = Math.round(im1.height * s);
       const bx = x, by = GROUND_Y - dh;
+
       const roof = makeRoof(bx, by, dw, dh);
       buildings.push({
-        id: nextBId++, typeId,
-        frames: [im1, im2 || im1], animT: 0,
-        x: bx, y: by, dw, dh, roof,
+        id: nextBId++,
+        typeId,
+        frames: [im1, im2 || im1],
+        animT: 0,
+        x: bx, y: by, dw, dh,
+        roof,
         doorX: bx, doorW: dw,
-        canEnterPossible: (typeId===2 || typeId===3)
+        canEnterPossible: (typeId === 2 || typeId === 3)
       });
-      x += dw + rint(28, 64);
+
+      x += dw + rint(INTRA_GAP_MIN, INTRA_GAP_MAX);
     }
-    x += rint(600, 1200);
+
+    const last = buildings.at(-1);
+    const xL = firstX;
+    const xR = last.x + last.dw;
+    const mid = Math.round((xL + xR) / 2);
+    blockRects.push({ xL, xR, mid });
+
+    // gap entre blocs (plus court → map ~3× plus courte)
+    x += rint(INTER_GAP_MIN, INTER_GAP_MAX);
   }
 
-  // 2) Réserve Kaito loin du début
-  const worldMin = buildings[0]?.x || worldStartX;
-  const worldMax = (buildings.at(-1)?.x || worldMin) + (buildings.at(-1)?.dw || 0);
-  const span     = Math.max(9000, worldMax - worldMin);
+  // ---------- Réserve Kaito : son bâtiment au bloc 6, Kaito au bloc 7 ----------
+  // (indices 0-based → blocs #5 et #6)
+  const kaitoBlockBld = Math.min(5, NUM_BLOCKS - 2);
+  const kaitoBlockNPC = Math.min(6, NUM_BLOCKS - 1);
 
-  const kaitoMin = worldMin + 6000;
-  const kaitoMax = worldMin + Math.floor(span * 0.8);
-  let kaitoX     = Math.max(kaitoMin, Math.min(kaitoMax, worldMin + Math.floor(span*0.7) + rint(-300,300)));
-  const reserveL = kaitoX - 1600, reserveR = kaitoX + 1600;
+  // Intervalles d’exclusion (évite toute superposition PNJ/posters avec bâtiments)
+  const forbid = buildings.map(b => [b.x - 520, b.x + b.dw + 520]);
 
-  // décale ce qui empiète sur la réserve
-  for (const b of buildings) {
-    if (b.x < reserveR && b.x + b.dw > reserveL) {
-      const shift = reserveR - (b.x + b.dw) + 320;
-      b.x += shift; b.doorX += shift; b.roof.x += shift;
-    }
+  function placeXNear(center, w){
+    let px = placeInGaps(center, w, forbid, 140);
+    forbid.push([px - Math.max(260, w*1.3), px + Math.max(260, w*1.3)]);
+    return px;
   }
 
-  // 3) Intervalles d’exclusion (anti-superposition pour PNJ/posters)
-  const forbid = intervalsFromBuildings(520);
-
-  // 4) Place Kaito (perso)
-  npcs.length = 0;
-  kaitoX = placeInGaps(kaitoX, 200, forbid, 160);
-  forbid.push([kaitoX-300, kaitoX+300]);
-  npcs.push({ type:'kaito', x:kaitoX, frames:images.npcs.kaito, animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
-
-  // Bâtiment de Kaito à sa gauche
+  // ---------- Bâtiment Kaito (immédiatement avant Kaito) ----------
   if (images.buildingKaito) {
     const base = images.buildingKaito[0];
     const s  = BUILDING_TARGET_H / base.height;
     const dw = Math.round(base.width * s);
     const dh = Math.round(base.height * s);
-    const minBX = reserveL - 1200, maxBX = kaitoX - 400 - dw;
-    let bx = Math.max(minBX, Math.min(maxBX, kaitoX - (dw + 220)));
-    bx = placeInGaps(bx, dw, forbid, 160);
+
+    const block = blockRects[kaitoBlockBld];
+    let bx = placeInGaps(block.mid - (dw + 220), dw, forbid, 160);
     const by = GROUND_Y - dh;
     const roof = makeRoof(bx, by, dw, dh);
+
     buildings.push({
-      id: nextBId++, typeId: 98,
+      id: nextBId++,
+      typeId: 98,
       frames: [images.buildingKaito[0], images.buildingKaito[1] || images.buildingKaito[0]],
-      animT:0, x:bx, y:by, dw, dh, roof, doorX:bx, doorW:dw, canEnterPossible:false
+      animT: 0, x: bx, y: by, dw, dh, roof,
+      doorX: bx, doorW: dw,
+      canEnterPossible: false
     });
-    forbid.push([bx-420, bx+dw+420]);
+    forbid.push([bx - 420, bx + dw + 420]);
   }
 
-  // 5) RÈGLE DURE PNJ : tous les 3–5 bâtiments
-  const PNJ_EVERY_MIN = 3, PNJ_EVERY_MAX = 5;
-  const firstThird = Math.floor(buildings.length/3);
+  // ---------- PNJ : 1 par bloc (Aeron une seule fois, tôt) ----------
+  const firstThird = Math.max(1, Math.floor(NUM_BLOCKS / 3));
   let aeronPlaced = false;
 
-  for (let idx = rint(2,4); idx < buildings.length; idx += rint(PNJ_EVERY_MIN, PNJ_EVERY_MAX)) {
-    const b  = buildings[Math.min(idx, buildings.length-1)];
-    let px   = b.x + Math.round(b.dw*0.5) + rint(-140,140);
-    if (px > reserveL && px < reserveR) px = reserveR + 600;
+  for (let b = 0; b < NUM_BLOCKS; b++) {
+    const mid = blockRects[b].mid;
+    // Choix du type
+    let type = 'kahikoans';                  // par défaut
+    if (!aeronPlaced && b < firstThird) {    // Aeron tôt, une seule fois
+      type = 'aeron'; aeronPlaced = true;
+    } else if (Math.random() < 0.40) {
+      type = 'maonis';
+    }
+    // Kaito au bloc dédié
+    if (b === kaitoBlockNPC) type = 'kaito';
 
-    let type = 'kahikoans';
-    if (!aeronPlaced && idx <= firstThird) { type='aeron'; aeronPlaced=true; }
-    else if (Math.random() < 0.35)        { type='maonis'; }
-
-    px = placeInGaps(px, 200, forbid, 120);
-    forbid.push([px-300, px+300]);
-    npcs.push({ type, x:px, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
-  }
-  if (!aeronPlaced) {
-    const b = buildings[Math.min(5, buildings.length-1)];
-    let px = placeInGaps(b.x + Math.round(b.dw*0.5), 200, forbid, 120);
-    npcs.unshift({ type:'aeron', x:px, frames:images.npcs.aeron, animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
-    forbid.push([px-300, px+300]);
-  }
-
-  // 6) RÈGLE DURE POSTERS : tous les 4–6 bâtiments (cap 10)
-  posters.length = 0;
-  for (let idx = rint(3,5); posters.length < POSTERS_TOTAL && idx < buildings.length; idx += rint(4,6)) {
-    const b = buildings[Math.min(idx, buildings.length-1)];
-    let px  = b.x + Math.round(b.dw*0.5) + rint(-120,120);
-    if (px > reserveL && px < reserveR) px = reserveR + 600;
-    px = placeInGaps(px, POSTER_SIZE, forbid, 140);
-    posters.push({ x:px, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
-    forbid.push([px-260, px+POSTER_SIZE+260]);
-  }
-  // Complète si < 10
-  for (let i=2; posters.length<POSTERS_TOTAL && i<buildings.length; i+=4) {
-    const b = buildings[i];
-    let px  = b.x + Math.round(b.dw*0.5);
-    if (px > reserveL && px < reserveR) continue;
-    px = placeInGaps(px, POSTER_SIZE, forbid, 140);
-    posters.push({ x:px, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
-    forbid.push([px-260, px+POSTER_SIZE+260]);
+    const px = placeXNear(mid + rint(-140, 140), 200);
+    npcs.push({
+      type, x: px,
+      frames: images.npcs[type],
+      animT: 0, face: 'right',
+      show: false, hideT: 0,
+      dialogImg: null, dialogIdx: 0
+    });
   }
 
-  // 7) Mur de fin
+  // ---------- Posters : 1 par bloc (10 au total) ----------
+  const POSTER_W = POSTER_SIZE;
+  for (let b = 0; b < NUM_BLOCKS; b++) {
+    const mid = blockRects[b].mid;
+    const px = placeXNear(mid + rint(-120, 120), POSTER_W);
+    posters.push({
+      x: px,
+      y: GROUND_Y - POSTER_SIZE, // touche bien le sol
+      w: POSTER_SIZE, h: POSTER_SIZE,
+      t: 0, taking: false, taken: false
+    });
+  }
+
+  // ---------- Mur de fin juste après le dernier bloc ----------
   worldEndX = Math.max(
-    ...buildings.map(b=>b.x+b.dw),
-    ...posters.map(p=>p.x+p.w),
-    ...npcs.map(n=>n.x+200)
-  ) + 1600;
+    ...buildings.map(b => b.x + b.dw),
+    ...posters.map(p => p.x + p.w),
+    ...npcs.map(n => n.x + 200)
+  ) + 1200;
+
   spawnEndWall();
 }
-
 
   function spawnEndWall(){
     if(!images.buildingWall) return;
