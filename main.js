@@ -1,12 +1,8 @@
-// IO83 – main.js (cohérent et verrouillé)
-// - Kaito: building_kaito clamped loin du début et AVANT Kaito (segment réservé)
-// - Myo & PNJ: même taille et ancrage sol
-// - Zéro superposition via intervalles réservés
-// - Mur fin: sfx_getout (distinct de porte close)
-// - Toits: one-way + drop-through avec ↓ (n’ouvre jamais une porte)
-// - Interior: zone terminal large, pas de pas en boucle
-// - Start: bouton affiche "Loading…" jusqu'à ready
-// - Myo walk = 2 frames
+// IO83 – main.js (cohérent + correctifs demandés)
+// - Abaissage global Myo & PNJ (compense marge basse des PNG)
+// - Répartition semi-aléatoire: + de 1&4, 2&3 plus rares (≥12 ouvrables pour 10 eggs)
+// - Posters: 10 au total, 1 tous les 5 bâtiments, avant le mur, sans superposition
+// - Reste inchangé: dash double-tap (2e dash dispo après 2e saut), toits one-way + ↓, interiors, Kaito+ship, mur fin getout
 
 (function(){
   'use strict';
@@ -76,9 +72,8 @@
     back :'assets/background/bg_far.png'+CB,
     mid  :'assets/background/bg_mid.png'+CB,
     front:'assets/background/ground.png'+CB,
-    // Myo: 2 idle + 2 walk (conformément à tes fichiers actuels)
     myoIdle:['assets/characters/myo/myo_idle_1.png'+CB,'assets/characters/myo/myo_idle_2.png'+CB],
-    myoWalk:['assets/characters/myo/myo_walk_1.png'+CB,'assets/characters/myo/myo_walk_2.png'+CB],
+    myoWalk:['assets/characters/myo/myo_walk_1.png'+CB,'assets/characters/myo/myo_walk_2.png'+CB], // 2 frames
     posterWith:'assets/collectibles/wanted_withposter.png'+CB,
     posterWithout:'assets/collectibles/wanted_withoutposter.png'+CB,
     npcs:{
@@ -112,9 +107,10 @@
   const loadImg=src=>new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; });
 
   /* ========== Player / Physique ========== */
-  // Standardisation tailles perso & PNJ (même hauteur visuelle)
-  const CHAR_H=300; // hauteur monde pour Myo & PNJ
+  // Standardisation tailles + abaissement visible (compense la marge basse)
+  const CHAR_H=300; // Myo & PNJ (monde)
   const MYO_H=CHAR_H, NPC_H=CHAR_H;
+  const FOOT_PAD_RATIO=0.14; // ↓ 14% de la hauteur rendue (ajustable si besoin)
   const MYO_H_INTERIOR=Math.round(MYO_H*1.7), INTERIOR_FOOT_EXTRA=Math.round(MYO_H_INTERIOR/6);
 
   const MOVE_SPEED=360*1.2*1.15, AIR_SPEED_MULT=1.2;
@@ -148,7 +144,7 @@
 
   const player={x:0,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
 
-  /* ========== Posters (10 réparties) ========== */
+  /* ========== Posters ========== */
   const POSTERS_TOTAL=10, POSTER_SIZE=Math.round(100*1.2);
   const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[];
@@ -226,7 +222,6 @@
     return false;
   }
   function placeInGaps(x, w, list, step=80, guard=400){
-    // trie & pousse vers la droite jusqu’à trouver un “gap”
     const sorted=[...list].sort((a,b)=>a[0]-b[0]);
     let tries=0;
     while(tries++<guard){
@@ -239,15 +234,29 @@
     return x;
   }
 
-  /* ========== Build world (répartition cohérente) ========== */
+  /* ========== Build world (semi-aléatoire, contrainte) ========== */
+  function pickBuildingFrameWeighted(){
+    // Pondération: 1 & 4 plus fréquents, 2 & 3 plus rares
+    const pool=[
+      ...Array(35).fill(1),
+      ...Array(15).fill(2),
+      ...Array(15).fill(3),
+      ...Array(35).fill(4),
+    ];
+    const t=pool[rint(0,pool.length-1)];
+    const found=images.buildings.find(b=>b[2]===t) || images.buildings[0];
+    return found; // [img1, img2, typeId]
+  }
+
   function buildWorld(){
-    // 1) villages
     buildings.length=0;
-    let x=worldStartX, endTarget=worldStartX+16000;
-    while(x<endTarget){
-      const count=(Math.random()<0.65)? rint(2,3):1;
-      for(let i=0;i<count;i++){
-        const [im1,im2,typeId]=images.buildings[rint(0,images.buildings.length-1)];
+
+    // Objectif: au moins 55-60 bâtiments pour pouvoir placer 10 posters "1 tous les 5"
+    let x=worldStartX; const minBuildings=60;
+    while(buildings.length < minBuildings){
+      const cluster=(Math.random()<0.65)? rint(2,3):1;
+      for(let i=0;i<cluster;i++){
+        const [im1,im2,typeId]=pickBuildingFrameWeighted();
         const s=BUILDING_TARGET_H/im1.height, dw=Math.round(im1.width*s), dh=Math.round(im1.height*s);
         const bx=x, by=GROUND_Y-dh;
         const roof=makeRoof(bx,by,dw,dh);
@@ -257,10 +266,10 @@
       x += rint(600,1200);
     }
 
-    // 2) entrables: UNIQUEMENT types 2 & 3, exactement 10 réparties
+    // Entrables: UNIQUEMENT types 2 & 3, au moins 12 répartis (pour 10 eggs)
     const enterables = buildings.filter(b=>b.typeId===2||b.typeId===3).sort((a,b)=>a.x-b.x);
     enterables.forEach(b=>b.canEnter=false);
-    const need=10;
+    const need=12; // ≥ eggs (10)
     if(enterables.length){
       for(let i=0;i<Math.min(need,enterables.length);i++){
         const idx=Math.floor((i+0.5)*enterables.length/need);
@@ -273,12 +282,11 @@
     const worldMax=(buildings.at(-1)?.x||worldMin)+(buildings.at(-1)?.dw||0);
     const span=Math.max(8000, worldMax-worldMin);
 
-    // 3) réserve Kaito (pour éviter tout push imprévu vers le début)
-    const kaitoMin = worldMin + 6000;                  // jamais au début
-    const kaitoMax = worldMin + Math.floor(span*0.8);  // pas tout à la fin
+    // Kaito: loin du début & ship AVANT lui (fenêtre réservée)
+    const kaitoMin = worldMin + 6000;
+    const kaitoMax = worldMin + Math.floor(span*0.8);
     let kaitoX = Math.max(kaitoMin, Math.min(kaitoMax, worldMin + Math.floor(span*0.7) + rint(-300,300)));
 
-    // Clear une fenêtre réservée autour de Kaito
     const reserveL = kaitoX - 1600, reserveR = kaitoX + 1600;
     for(const b of buildings){
       if(b.x < reserveR && b.x+b.dw > reserveL){
@@ -287,36 +295,33 @@
       }
     }
 
-    // 4) PNJ répartis (hors fenêtre réservée Kaito)
+    // PNJ répartis sur toute la longueur (sans superposition)
     npcs.length=0;
     const intervalsNow = intervalsFromBuildings(480);
     const placeNPC=(type, target)=>{
       let px = placeInGaps(target + rint(-400,400), 200, intervalsNow, 120);
-      // si dans la fenêtre Kaito, pousse après
       if(px>reserveL && px<reserveR) px = reserveR + 600;
-      intervalsNow.push([px-300, px+300]); // réserve pour éviter superposition
+      intervalsNow.push([px-300, px+300]);
       npcs.push({type,x:px,frames:images.npcs[type],animT:0,face:'right',show:false,hideT:0,dialogImg:null,dialogIdx:0});
     };
-    // Aeron x1, Maonis x2, Kahi x3
-    const slots=[1,2,3,4,5,6]; // réparti grossièrement
-    placeNPC('aeron', worldMin + span*0.25);
-    placeNPC('maonis', worldMin + span*0.40);
-    placeNPC('maonis', worldMin + span*0.55);
-    placeNPC('kahikoans', worldMin + span*0.20);
-    placeNPC('kahikoans', worldMin + span*0.50);
-    placeNPC('kahikoans', worldMin + span*0.75);
+    placeNPC('aeron',  worldMin + span*0.22);
+    placeNPC('maonis', worldMin + span*0.34);
+    placeNPC('maonis', worldMin + span*0.48);
+    placeNPC('kahikoans', worldMin + span*0.28);
+    placeNPC('kahikoans', worldMin + span*0.62);
+    placeNPC('kahikoans', worldMin + span*0.78);
 
-    // 5) Kaito + building_kaito à sa GAUCHE, CLAmpé dans [kaitoMin, kaitoMax]
+    // Kaito lui-même
     kaitoX = placeInGaps(kaitoX, 200, intervalsNow, 160);
     intervalsNow.push([kaitoX-300, kaitoX+300]);
     npcs.push({type:'kaito',x:kaitoX,frames:images.npcs.kaito,animT:0,face:'right',show:false,hideT:0,dialogImg:null,dialogIdx:0});
 
+    // Bâtiment de Kaito à sa GAUCHE, clampé (jamais au début)
     if(images.buildingKaito){
       const base=images.buildingKaito[0], s=BUILDING_TARGET_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
-      const minBX = kaitoMin;                         // clamp dur
-      const maxBX = kaitoX - 400 - dw;                // toujours AVANT Kaito
+      const minBX = kaitoMin;
+      const maxBX = kaitoX - 400 - dw;
       let bx = Math.max(minBX, Math.min(maxBX, kaitoX - (dw + 220)));
-      // évite toute collision avec bâtiments existants
       const bList = intervalsFromBuildings(240);
       bx = placeInGaps(bx, dw, bList, 160);
       const by=GROUND_Y-dh;
@@ -324,20 +329,22 @@
       buildings.push({id:nextBId++, typeId:98, frames:[images.buildingKaito[0],images.buildingKaito[1]||images.buildingKaito[0]], animT:0, x:bx,y:by,dw,dh, roof, doorX:bx,doorW:dw, canEnter:false});
     }
 
-    // 6) Posters (10) – répartis avec intervalles (zéro superposition)
+    // Posters: 10, 1 tous les 5 bâtiments (indices 5,10,15,...), sans superposition
     posters.length=0;
     const forbid = intervalsFromBuildings(520);
-    // réserver aussi PNJ
     for(const n of npcs) forbid.push([n.x-300, n.x+300]);
-    for(let i=0;i<POSTERS_TOTAL;i++){
-      let w=POSTER_SIZE;
-      let px = worldMin + ((i+1)/(POSTERS_TOTAL+1))*span + rint(-220,220);
-      px = placeInGaps(px, w, forbid, 140);
-      posters.push({x:px, y:GROUND_Y-POSTER_SIZE, w, h:POSTER_SIZE, t:0, taking:false, taken:false});
-      forbid.push([px-260, px+w+260]);
+
+    const sortedB=[...buildings].sort((a,b)=>a.x-b.x);
+    for(let k=1;k<=POSTERS_TOTAL;k++){
+      const idx=k*5 - 1; // 0-based
+      const ref = sortedB[Math.min(idx, sortedB.length-1)];
+      let px = ref.x + Math.round(ref.dw*0.5) + rint(-120,120);
+      px = placeInGaps(px, POSTER_SIZE, forbid, 140);
+      posters.push({x:px, y:GROUND_Y-POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false});
+      forbid.push([px-260, px+POSTER_SIZE+260]);
     }
 
-    // 7) Mur de fin
+    // Mur de fin (après tout)
     worldEndX = Math.max(...[...buildings.map(b=>b.x+b.dw), ...posters.map(p=>p.x+p.w), ...npcs.map(n=>n.x+200)]) + 1600;
     spawnEndWall();
   }
@@ -366,8 +373,8 @@
     const idx=frames.length>1?Math.floor(player.animTime*fps)%frames.length:0;
     const img=frames[idx]||images.myoIdle[0]; if(!img) return;
     const s=H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
-    const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff;
-    // dash trail
+    const footPad=Math.round(dh*FOOT_PAD_RATIO); // ↓ abaissement
+    const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff + footPad;
     if(dashTimer>0 && images.dashTrail.length){
       const ti=images.dashTrail[Math.floor(player.animTime*9)%images.dashTrail.length];
       ctx.save(); if(player.facing==='left'){ ctx.translate(x+dw/2-16,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); } else ctx.translate(x-16,y);
@@ -389,7 +396,8 @@
     for(const n of npcs){
       const base=n.frames[0]; if(!base) continue;
       const s=NPC_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
-      const sy=(GROUND_Y+yOff)-dh, sx=Math.floor(n.x - cameraX);
+      const footPad=Math.round(dh*FOOT_PAD_RATIO);
+      const sy=(GROUND_Y+yOff)-dh+footPad, sx=Math.floor(n.x - cameraX);
       if(player.x<n.x) n.face='left'; else if(player.x>n.x) n.face='right';
       const img=n.frames[Math.floor(n.animT*2)%2]||base;
       ctx.save();
@@ -406,8 +414,8 @@
 
       if(n.dialogImg){
         const scale=0.72, bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
-        const bx=sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5); // décalé un peu à gauche
-        const by=sy - Math.round(bh*0.5);                              // un peu plus bas
+        const bx=sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5);
+        const by=sy - Math.round(bh*0.5);
         ctx.drawImage(n.dialogImg,bx,by,bw,bh);
       }
       n.animT+=1/60;
@@ -523,7 +531,7 @@
           else { sfx.doorLocked?.play().catch(()=>{}); break; }
         }
       }
-      // Mur fin (toute la largeur) -> getout
+      // Mur fin -> getout
       if(endWall){
         if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) sfx.getout?.play().catch(()=>{});
       }
@@ -603,7 +611,7 @@
           hackedIds.add(currentB.id);
           eggIndex=Math.min(10,eggIndex+1); eggs=eggIndex; setEggs();
         }
-        interiorOpenIdx=Math.max(1,eggIndex); // progression 1→10, 1er hack = open_1, …, 10e = open_10
+        interiorOpenIdx=Math.max(1,eggIndex); // 1→10
       }
     }
 
@@ -638,6 +646,6 @@
     requestAnimationFrame(loop);
   }
   function tryStart(){ startAudio(); boot(); }
-
   startBtn.addEventListener('click', tryStart, {once:true});
+
 })();
