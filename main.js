@@ -305,7 +305,25 @@
 
       x += rint(INTER_GAP_MIN, INTER_GAP_MAX);
     }
+      // Intervalles d’exclusion globaux (anti-chevauchement total)
+  const forbid = buildings.map(b => [b.x - 520, b.x + b.dw + 520]);
+  const reserve = (x0, w, extra=260) => { forbid.push([x0 - extra, x0 + w + extra]); };
 
+  // Place un x "au plus près", en poussant vers la droite sans jamais tomber dans une zone interdite
+  function placeInGapsClamp(x, w, step=120){
+    // tri par borne gauche
+    const sorted=[...forbid].sort((a,b)=>a[0]-b[0]);
+    let tries=0;
+    while(tries++<400){
+      let hit=false;
+      for(const [L,R] of sorted){
+        if(x < R && x + w > L){ x = R + step; hit=true; break; }
+      }
+      if(!hit) break;
+    }
+    return x;
+  }
+    
   // ---------- Réserve Kaito : son bâtiment au bloc 6, Kaito au bloc 7 ----------
   // (indices 0-based → blocs #5 et #6)
   const kaitoBlockBld = Math.min(5, NUM_BLOCKS - 2);
@@ -381,24 +399,12 @@
     const dh = Math.round(base.height * s);
 
     const block = blockRects[kaitoBlockBld];
-    // On calcule les zones libres dans ce bloc, puis on impose le bâtiment Kaito près du bord droit
-    let spans = freeSpansInBlock(block, 300);
-    // cible: un peu avant le milieu (pour laisser Kaito PNJ à droite)
-    let prefer = Math.round(block.mid - dw - 220);
-    let bx = pickXFromSpans(spans, dw, prefer);
-    if (bx === null) {
-      // relax marges si nécessaire
-      for(const m of [240,200,160,120,80]){
-        spans = freeSpansInBlock(block, m);
-        bx = pickXFromSpans(spans, dw, prefer);
-        if(bx!==null) break;
-      }
-      // dernier recours: clamp dans le bloc (peut se rapprocher mais sans chevaucher car basé sur spans)
-      if(bx===null){
-        const min=block.xL+120, max=block.xR-120-dw;
-        bx=Math.max(min, Math.min(max, prefer));
-      }
-    }
+
+    // Place Kaito building au plus près du centre du bloc, sans chevauchement global
+    // (nécessite reserve() et placeInGapsClamp() ajoutés plus haut)
+    let prefer = Math.round(block.mid - 220);
+    let bx = placeInGapsClamp(prefer - dw, dw, 160);
+
     const by = GROUND_Y - dh;
     const roof = makeRoof(bx, by, dw, dh);
 
@@ -409,7 +415,11 @@
       doorX: bx, doorW: dw,
       canEnterPossible: false
     });
+
+    // Réserve l’espace pour empêcher tout recouvrement futur
+    reserve(bx, dw, 420);
   }
+
 
   // ---------- PNJ : 1 par bloc (Aeron tôt, Kaito bloc suivant) ----------
   const firstThird = Math.max(1, Math.floor(NUM_BLOCKS / 3));
