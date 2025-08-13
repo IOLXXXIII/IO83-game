@@ -53,3 +53,5 @@ html,body{
   cursor:pointer; pointer-events:auto;
 }
 #gate button:disabled{ opacity:.6; cursor:default }
+
+html, body, #game { touch-action: none; }
