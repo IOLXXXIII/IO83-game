@@ -161,7 +161,7 @@
   const BUILDING_TARGET_H=Math.round(450*1.15);
 
   const buildings=[]; let nextBId=1;
-  let worldStartX=1400, worldEndX=20000;
+  let worldStartX=480, worldEndX=20000;
   let endWall=null;
 
   // toits one-way (largeur droite réduite)
@@ -304,10 +304,27 @@ function buildWorld(){
   // Intervalles d’exclusion (évite toute superposition PNJ/posters avec bâtiments)
   const forbid = buildings.map(b => [b.x - 520, b.x + b.dw + 520]);
 
-  function placeXNear(center, w){
-    let px = placeInGaps(center, w, forbid, 140);
-    forbid.push([px - Math.max(260, w*1.3), px + Math.max(260, w*1.3)]);
-    return px;
+  // Recherche locale CONTRAINTE AU BLOC (ne sort JAMAIS du bloc)
+  function placeInBlock(center, w, block, forbidList, step=40, margin=260){
+    const min = block.xL + margin;
+    const max = block.xR - margin - w;
+    const clamp = (v)=> Math.max(min, Math.min(max, v));
+    const collides = (x)=>{
+      for(const [L,R] of forbidList){ if(x < R && x+w > L) return true; }
+      return false;
+    };
+    let x0 = clamp(center);
+    if(!collides(x0)){ forbidList.push([x0-margin, x0+w+margin]); return x0; }
+    // explore gauche/droite dans le BLOC
+    for(let k=1;k<=48;k++){
+      const L = clamp(center - k*step);
+      if(!collides(L)){ forbidList.push([L-margin, L+w+margin]); return L; }
+      const R = clamp(center + k*step);
+      if(!collides(R)){ forbidList.push([R-margin, R+w+margin]); return R; }
+    }
+    // fallback dur : centre clampé (au pire, frôle)
+    forbidList.push([x0-margin, x0+w+margin]);
+    return x0;
   }
 
   // ---------- Bâtiment Kaito (immédiatement avant Kaito) ----------
@@ -318,13 +335,13 @@ function buildWorld(){
     const dh = Math.round(base.height * s);
 
     const block = blockRects[kaitoBlockBld];
-    let bx = placeInGaps(block.mid - (dw + 220), dw, forbid, 160);
+    // tente proche du centre du bloc dédié
+    let bx = placeInBlock(block.mid - (dw + 220), dw, block, forbid, 40, 220);
     const by = GROUND_Y - dh;
     const roof = makeRoof(bx, by, dw, dh);
 
     buildings.push({
-      id: nextBId++,
-      typeId: 98,
+      id: nextBId++, typeId: 98,
       frames: [images.buildingKaito[0], images.buildingKaito[1] || images.buildingKaito[0]],
       animT: 0, x: bx, y: by, dw, dh, roof,
       doorX: bx, doorW: dw,
@@ -333,43 +350,27 @@ function buildWorld(){
     forbid.push([bx - 420, bx + dw + 420]);
   }
 
-  // ---------- PNJ : 1 par bloc (Aeron une seule fois, tôt) ----------
+  // ---------- PNJ : 1 par bloc (Aeron une fois tôt, Kaito bloc suivant) ----------
   const firstThird = Math.max(1, Math.floor(NUM_BLOCKS / 3));
   let aeronPlaced = false;
 
   for (let b = 0; b < NUM_BLOCKS; b++) {
-    const mid = blockRects[b].mid;
-    // Choix du type
-    let type = 'kahikoans';                  // par défaut
-    if (!aeronPlaced && b < firstThird) {    // Aeron tôt, une seule fois
-      type = 'aeron'; aeronPlaced = true;
-    } else if (Math.random() < 0.40) {
-      type = 'maonis';
-    }
-    // Kaito au bloc dédié
-    if (b === kaitoBlockNPC) type = 'kaito';
+    const block = blockRects[b];
+    let type = 'kahikoans';
+    if (!aeronPlaced && b < firstThird) { type = 'aeron'; aeronPlaced = true; }
+    else if (Math.random() < 0.40)      { type = 'maonis'; }
+    if (b === kaitoBlockNPC)            { type = 'kaito'; }
 
-    const px = placeXNear(mid + rint(-140, 140), 200);
-    npcs.push({
-      type, x: px,
-      frames: images.npcs[type],
-      animT: 0, face: 'right',
-      show: false, hideT: 0,
-      dialogImg: null, dialogIdx: 0
-    });
+    const px = placeInBlock(block.mid + rint(-140,140), 200, block, forbid, 40, 240);
+    npcs.push({ type, x:px, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
   }
 
-  // ---------- Posters : 1 par bloc (10 au total) ----------
+  // ---------- Posters : 1 par bloc (10 au total, au sol) ----------
   const POSTER_W = POSTER_SIZE;
   for (let b = 0; b < NUM_BLOCKS; b++) {
-    const mid = blockRects[b].mid;
-    const px = placeXNear(mid + rint(-120, 120), POSTER_W);
-    posters.push({
-      x: px,
-      y: GROUND_Y - POSTER_SIZE, // touche bien le sol
-      w: POSTER_SIZE, h: POSTER_SIZE,
-      t: 0, taking: false, taken: false
-    });
+    const block = blockRects[b];
+    const px = placeInBlock(block.mid + rint(-120,120), POSTER_W, block, forbid, 40, 240);
+    posters.push({ x:px, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
   }
 
   // ---------- Mur de fin juste après le dernier bloc ----------
