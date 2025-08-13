@@ -1,8 +1,5 @@
-// IO83 – main.js (cohérent + correctifs demandés)
-// - Abaissage global Myo & PNJ (compense marge basse des PNG)
-// - Répartition semi-aléatoire: + de 1&4, 2&3 plus rares (≥12 ouvrables pour 10 eggs)
-// - Posters: 10 au total, 1 tous les 5 bâtiments, avant le mur, sans superposition
-// - Reste inchangé: dash double-tap (2e dash dispo après 2e saut), toits one-way + ↓, interiors, Kaito+ship, mur fin getout
+// IO83 – main.js (répartition homogène + entrée 2/3 aléatoire avec garantie 10/10)
+// ⚠️ Conserve tout ce qui marche déjà (dash, double saut, toits one-way + ↓, intérieurs, Kaito + ship, mur fin, caméra, overlay posters)
 
 (function(){
   'use strict';
@@ -11,6 +8,18 @@
   const rnd=(a,b)=>Math.random()*(b-a)+a;
   const rint=(a,b)=>Math.floor(rnd(a,b+1));
   const aabb=(ax,ay,aw,ah,bx,by,bw,bh)=>ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
+
+  // 1D blue-noise simple: positions quasi-équidistantes + jitter, puis “poussé” par gaps
+  function blueNoise1D(count, minX, maxX, minGap){
+    const span=maxX-minX; const step=span/(count+1);
+    const out=[];
+    for(let i=1;i<=count;i++){
+      const base=minX+i*step;
+      const jitter=rnd(-minGap*0.4, minGap*0.4);
+      out.push(base+jitter);
+    }
+    return out.sort((a,b)=>a-b);
+  }
 
   /* ========== Canvas ========== */
   const canvas=document.getElementById('game');
@@ -73,7 +82,7 @@
     mid  :'assets/background/bg_mid.png'+CB,
     front:'assets/background/ground.png'+CB,
     myoIdle:['assets/characters/myo/myo_idle_1.png'+CB,'assets/characters/myo/myo_idle_2.png'+CB],
-    myoWalk:['assets/characters/myo/myo_walk_1.png'+CB,'assets/characters/myo/myo_walk_2.png'+CB], // 2 frames
+    myoWalk:['assets/characters/myo/myo_walk_1.png'+CB,'assets/characters/myo/myo_walk_2.png'+CB],
     posterWith:'assets/collectibles/wanted_withposter.png'+CB,
     posterWithout:'assets/collectibles/wanted_withoutposter.png'+CB,
     npcs:{
@@ -107,10 +116,9 @@
   const loadImg=src=>new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; });
 
   /* ========== Player / Physique ========== */
-  // Standardisation tailles + abaissement visible (compense la marge basse)
-  const CHAR_H=300; // Myo & PNJ (monde)
+  const CHAR_H=300; // hauteur visuelle monde standard
   const MYO_H=CHAR_H, NPC_H=CHAR_H;
-  const FOOT_PAD_RATIO=0.14; // ↓ 14% de la hauteur rendue (ajustable si besoin)
+  const FOOT_PAD_RATIO=0.14; // abaisse les sprites (compense vide PNG bas)
   const MYO_H_INTERIOR=Math.round(MYO_H*1.7), INTERIOR_FOOT_EXTRA=Math.round(MYO_H_INTERIOR/6);
 
   const MOVE_SPEED=360*1.2*1.15, AIR_SPEED_MULT=1.2;
@@ -121,7 +129,7 @@
   const AIR_JUMPS=1; let airJumpsUsed=0;
   const COYOTE_TIME=0.10, JUMP_BUFFER=0.12; let coyote=0, jumpBuf=0;
 
-  // Dash (double-tap) – 2e dash possible après 2e saut
+  // Dash double-tap (2e dash possible après 2e saut)
   const DASH_WINDOW=0.22, DASH_DUR=0.18, DASH_COOL_G=0.6, DASH_COOL_A=0.28, DASH_MULT=4;
   let lastTapL=-999,lastTapR=-999,dashTimer=0,dashCooldown=0,airDashUsed=0;
 
@@ -180,6 +188,22 @@
   const npcs=[];
   let eggIndex=0; const hackedIds=new Set(); eggs=eggIndex; setEggs();
 
+  /* ===== Entrée aléatoire 2/3 avec garantie ===== */
+  const BASE_ENTER_CHANCE=0.55; // chance nominale d’ouverture
+  const triedDoor=new Set();    // portes 2/3 déjà testées (par id)
+  function shouldEnterThis23(b){
+    // Si déjà testée et fermée précédemment → garde l’état (pas de flip-flop)
+    if(triedDoor.has(b.id) && !b.wasOpen) return false;
+    // Comptes restants
+    const eggsRemain=10 - eggIndex;
+    const notTried = buildings.filter(x=> (x.typeId===2||x.typeId===3) && !triedDoor.has(x.id));
+    const potentialsRemain=notTried.length - (triedDoor.has(b.id)?0:1); // après ce test
+    // Sécu: si on risque de manquer d’œufs, on force l’ouverture
+    if(eggsRemain>=potentialsRemain) return true;
+    // Sinon, proba douce
+    return Math.random() < BASE_ENTER_CHANCE;
+  }
+
   /* ========== Chargement ========== */
   let worldReady=false;
   async function loadAll(){
@@ -217,42 +241,30 @@
   function intervalsFromBuildings(margin=420){
     return buildings.map(b=>[b.x-margin, b.x+b.dw+margin]);
   }
-  function overlapsIntervals(x,w, list){
-    for(const [L,R] of list){ if(x < R && x+w > L) return true; }
-    return false;
-  }
   function placeInGaps(x, w, list, step=80, guard=400){
     const sorted=[...list].sort((a,b)=>a[0]-b[0]);
     let tries=0;
     while(tries++<guard){
       let hit=false;
-      for(const [L,R] of sorted){
-        if(x < R && x+w > L){ x = R + step; hit=true; break; }
-      }
+      for(const [L,R] of sorted){ if(x < R && x+w > L){ x = R + step; hit=true; break; } }
       if(!hit) break;
     }
     return x;
   }
 
-  /* ========== Build world (semi-aléatoire, contrainte) ========== */
+  /* ========== Build world (répartition homogène) ========== */
   function pickBuildingFrameWeighted(){
-    // Pondération: 1 & 4 plus fréquents, 2 & 3 plus rares
-    const pool=[
-      ...Array(35).fill(1),
-      ...Array(15).fill(2),
-      ...Array(15).fill(3),
-      ...Array(35).fill(4),
-    ];
+    // 1 & 4 plus fréquents, 2 & 3 plus rares (séparent naturellement)
+    const pool=[...Array(36).fill(1), ...Array(16).fill(2), ...Array(16).fill(3), ...Array(36).fill(4)];
     const t=pool[rint(0,pool.length-1)];
     const found=images.buildings.find(b=>b[2]===t) || images.buildings[0];
-    return found; // [img1, img2, typeId]
+    return found;
   }
 
   function buildWorld(){
     buildings.length=0;
-
-    // Objectif: au moins 55-60 bâtiments pour pouvoir placer 10 posters "1 tous les 5"
-    let x=worldStartX; const minBuildings=60;
+    // ~60+ bâtiments pour avoir de la matière sur toute la longueur
+    let x=worldStartX; const minBuildings=62;
     while(buildings.length < minBuildings){
       const cluster=(Math.random()<0.65)? rint(2,3):1;
       for(let i=0;i<cluster;i++){
@@ -260,33 +272,21 @@
         const s=BUILDING_TARGET_H/im1.height, dw=Math.round(im1.width*s), dh=Math.round(im1.height*s);
         const bx=x, by=GROUND_Y-dh;
         const roof=makeRoof(bx,by,dw,dh);
-        buildings.push({id:nextBId++, typeId, frames:[im1,im2||im1], animT:0, x:bx,y:by,dw,dh,roof,doorX:bx,doorW:dw, canEnter:false});
+        buildings.push({id:nextBId++, typeId, frames:[im1,im2||im1], animT:0, x:bx,y:by,dw,dh,roof,doorX:bx,doorW:dw, canEnterPossible:(typeId===2||typeId===3)});
         x += dw + rint(28,64);
       }
       x += rint(600,1200);
     }
 
-    // Entrables: UNIQUEMENT types 2 & 3, au moins 12 répartis (pour 10 eggs)
-    const enterables = buildings.filter(b=>b.typeId===2||b.typeId===3).sort((a,b)=>a.x-b.x);
-    enterables.forEach(b=>b.canEnter=false);
-    const need=12; // ≥ eggs (10)
-    if(enterables.length){
-      for(let i=0;i<Math.min(need,enterables.length);i++){
-        const idx=Math.floor((i+0.5)*enterables.length/need);
-        enterables[Math.min(idx,enterables.length-1)].canEnter=true;
-      }
-    }
-
     // bornes monde
     const worldMin=buildings[0]?.x||worldStartX;
     const worldMax=(buildings.at(-1)?.x||worldMin)+(buildings.at(-1)?.dw||0);
-    const span=Math.max(8000, worldMax-worldMin);
+    const span=Math.max(9000, worldMax-worldMin);
 
-    // Kaito: loin du début & ship AVANT lui (fenêtre réservée)
+    // Kaito: loin du début & ship avant lui (fenêtre réservée)
     const kaitoMin = worldMin + 6000;
     const kaitoMax = worldMin + Math.floor(span*0.8);
     let kaitoX = Math.max(kaitoMin, Math.min(kaitoMax, worldMin + Math.floor(span*0.7) + rint(-300,300)));
-
     const reserveL = kaitoX - 1600, reserveR = kaitoX + 1600;
     for(const b of buildings){
       if(b.x < reserveR && b.x+b.dw > reserveL){
@@ -295,28 +295,34 @@
       }
     }
 
-    // PNJ répartis sur toute la longueur (sans superposition)
+    // PNJ — distribution homogène (blue-noise) sur toute la map
     npcs.length=0;
-    const intervalsNow = intervalsFromBuildings(480);
-    const placeNPC=(type, target)=>{
-      let px = placeInGaps(target + rint(-400,400), 200, intervalsNow, 120);
-      if(px>reserveL && px<reserveR) px = reserveR + 600;
+    const intervalsNow = intervalsFromBuildings(520);
+    const npcCounts={ aeron:1, maonis:rint(3,4), kahikoans:rint(5,6) }; // plus de Maonis & Kahi
+    const npcOrder=['aeron','maonis','kahikoans'];
+
+    function placeNPC(type, target){
+      let px = placeInGaps(target, 200, intervalsNow, 120);
+      if(px>reserveL && px<reserveR) px = reserveR + 600; // pas dans la bulle Kaito
       intervalsNow.push([px-300, px+300]);
       npcs.push({type,x:px,frames:images.npcs[type],animT:0,face:'right',show:false,hideT:0,dialogImg:null,dialogIdx:0});
-    };
-    placeNPC('aeron',  worldMin + span*0.22);
-    placeNPC('maonis', worldMin + span*0.34);
-    placeNPC('maonis', worldMin + span*0.48);
-    placeNPC('kahikoans', worldMin + span*0.28);
-    placeNPC('kahikoans', worldMin + span*0.62);
-    placeNPC('kahikoans', worldMin + span*0.78);
+    }
+
+    const npcSpanMin = worldMin + 1200;
+    const npcSpanMax = worldMin + Math.floor(span*0.95);
+    for(const type of npcOrder){
+      const n=npcCounts[type];
+      const minGap = span/(n+2)*0.65;
+      const seeds = blueNoise1D(n, npcSpanMin, npcSpanMax, minGap);
+      seeds.forEach(s=>placeNPC(type, s));
+    }
 
     // Kaito lui-même
     kaitoX = placeInGaps(kaitoX, 200, intervalsNow, 160);
     intervalsNow.push([kaitoX-300, kaitoX+300]);
     npcs.push({type:'kaito',x:kaitoX,frames:images.npcs.kaito,animT:0,face:'right',show:false,hideT:0,dialogImg:null,dialogIdx:0});
 
-    // Bâtiment de Kaito à sa GAUCHE, clampé (jamais au début)
+    // Bâtiment de Kaito à sa GAUCHE, clampé garanti hors début
     if(images.buildingKaito){
       const base=images.buildingKaito[0], s=BUILDING_TARGET_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
       const minBX = kaitoMin;
@@ -326,20 +332,17 @@
       bx = placeInGaps(bx, dw, bList, 160);
       const by=GROUND_Y-dh;
       const roof=makeRoof(bx,by,dw,dh);
-      buildings.push({id:nextBId++, typeId:98, frames:[images.buildingKaito[0],images.buildingKaito[1]||images.buildingKaito[0]], animT:0, x:bx,y:by,dw,dh, roof, doorX:bx,doorW:dw, canEnter:false});
+      buildings.push({id:nextBId++, typeId:98, frames:[images.buildingKaito[0],images.buildingKaito[1]||images.buildingKaito[0]], animT:0, x:bx,y:by,dw,dh, roof, doorX:bx,doorW:dw, canEnterPossible:false});
     }
 
-    // Posters: 10, 1 tous les 5 bâtiments (indices 5,10,15,...), sans superposition
+    // Posters — 10 positions blue-noise sur tout le trajet, zéro superposition
     posters.length=0;
     const forbid = intervalsFromBuildings(520);
     for(const n of npcs) forbid.push([n.x-300, n.x+300]);
-
-    const sortedB=[...buildings].sort((a,b)=>a.x-b.x);
-    for(let k=1;k<=POSTERS_TOTAL;k++){
-      const idx=k*5 - 1; // 0-based
-      const ref = sortedB[Math.min(idx, sortedB.length-1)];
-      let px = ref.x + Math.round(ref.dw*0.5) + rint(-120,120);
-      px = placeInGaps(px, POSTER_SIZE, forbid, 140);
+    const posterMin = worldMin + 1200, posterMax = worldMin + Math.floor(span*0.97);
+    const posterSeeds = blueNoise1D(POSTERS_TOTAL, posterMin, posterMax, 700);
+    for(const px0 of posterSeeds){
+      let px = placeInGaps(px0, POSTER_SIZE, forbid, 140);
       posters.push({x:px, y:GROUND_Y-POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false});
       forbid.push([px-260, px+POSTER_SIZE+260]);
     }
@@ -373,7 +376,7 @@
     const idx=frames.length>1?Math.floor(player.animTime*fps)%frames.length:0;
     const img=frames[idx]||images.myoIdle[0]; if(!img) return;
     const s=H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
-    const footPad=Math.round(dh*FOOT_PAD_RATIO); // ↓ abaissement
+    const footPad=Math.round(dh*FOOT_PAD_RATIO);
     const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff + footPad;
     if(dashTimer>0 && images.dashTrail.length){
       const ti=images.dashTrail[Math.floor(player.animTime*9)%images.dashTrail.length];
@@ -480,7 +483,7 @@
     player.y += player.vy*dt;
     if(GROUND_Y+player.y>GROUND_Y){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
 
-    // Toits
+    // Toits one-way + ↓
     onPlatform=false;
     for(const b of buildings){
       const feet=GROUND_Y+player.y, top=b.roof.y;
@@ -503,7 +506,7 @@
       }
     }
 
-    // PNJ talk
+    // PNJ talk (apparition homogène déjà gérée par placement)
     for(const n of npcs){
       const near=Math.abs(player.x-n.x)<=NPC_TALK_RADIUS;
       if(near){ n.show=true; n.hideT=0; }
@@ -520,18 +523,25 @@
       if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount++; setWanted(); sfx.wanted?.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){ sfx.postersComplete?.play().catch(()=>{}); ensureOverlay().style.display='grid'; } } }
     }
 
-    // Portes (↓) — seulement si PAS sur un toit
+    // Portes
     if(wantsDown && !onPlatform && dropThrough<=0){
       for(const b of buildings){
         const atDoor=(player.x>b.doorX && player.x<b.doorX+b.doorW);
         const feet=GROUND_Y+player.y, base=b.y+b.dh;
         const nearBase=Math.abs(feet-base)<280;
         if(atDoor && nearBase){
-          if(b.canEnter && (b.typeId===2||b.typeId===3)){ enterInterior(b); break; }
-          else { sfx.doorLocked?.play().catch(()=>{}); break; }
+          if(b.canEnterPossible){
+            // Décide au moment du press
+            const open = shouldEnterThis23(b);
+            triedDoor.add(b.id);
+            if(open){ b.wasOpen=true; enterInterior(b); } else { b.wasOpen=false; sfx.doorLocked?.play().catch(()=>{}); }
+            break;
+          } else {
+            sfx.doorLocked?.play().catch(()=>{}); break;
+          }
         }
       }
-      // Mur fin -> getout
+      // Mur fin
       if(endWall){
         if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) sfx.getout?.play().catch(()=>{});
       }
@@ -647,5 +657,4 @@
   }
   function tryStart(){ startAudio(); boot(); }
   startBtn.addEventListener('click', tryStart, {once:true});
-
 })();
