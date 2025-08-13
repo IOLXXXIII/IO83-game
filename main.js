@@ -480,7 +480,7 @@
   ) + 1200;
 
   spawnEndWall();
- // <<<<<< FIN buildWorld()
+ } // <<<<<< FIN buildWorld()
 
   function spawnEndWall(){
     if(!images.buildingWall) return;
