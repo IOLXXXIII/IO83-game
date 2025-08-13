@@ -306,117 +306,181 @@
       x += rint(INTER_GAP_MIN, INTER_GAP_MAX);
     }
 
-    // ---------- Réserve Kaito : son bâtiment à bloc 6, Kaito bloc 7 ----------
-    const kaitoBlockBld = Math.min(5, NUM_BLOCKS - 2);
-    const kaitoBlockNPC = Math.min(6, NUM_BLOCKS - 1);
+  // ---------- Réserve Kaito : son bâtiment au bloc 6, Kaito au bloc 7 ----------
+  // (indices 0-based → blocs #5 et #6)
+  const kaitoBlockBld = Math.min(5, NUM_BLOCKS - 2);
+  const kaitoBlockNPC = Math.min(6, NUM_BLOCKS - 1);
 
-    // Intervalles d’exclusion (évite superpositions PNJ/posters avec bâtiments)
-    const forbid = buildings.map(b => [b.x - 520, b.x + b.dw + 520]);
-
-    // Recherche locale contrainte au BLOC
-    function placeInBlock(center, w, block, forbidList, step=24, margin=280){
-      const min = block.xL + margin;
-      const max = block.xR - margin - w;
-      const clamp = v => Math.max(min, Math.min(max, v));
-      const collides = (x) => { for (const [L,R] of forbidList) if (x < R && x + w > L) return true; return false; };
-
-      // 1) centre
-      let x0 = clamp(center);
-      if (!collides(x0)) { forbidList.push([x0 - margin, x0 + w + margin]); return x0; }
-      // 2) balayage
-      for (let k = 1; k <= 200; k++) {
-        const L = clamp(center - k * step);
-        if (!collides(L)) { forbidList.push([L - margin, L + w + margin]); return L; }
-        const R = clamp(center + k * step);
-        if (!collides(R)) { forbidList.push([R - margin, R + w + margin]); return R; }
-      }
-      // 3) margin relax
-      for (const m of [240, 200, 160, 120, 100, 80]) {
-        x0 = clamp(center);
-        const coll = (x)=>{ for(const [L,R] of forbidList) if (x < R && x + w > L) return true; return false; };
-        if (!coll(x0)) { forbidList.push([x0 - m, x0 + w + m]); return x0; }
-        for (let k = 1; k <= 200; k++) {
-          const L = clamp(center - k * step);
-          if (!coll(L)) { forbidList.push([L - m, L + w + m]); return L; }
-          const R = clamp(center + k * step);
-          if (!coll(R)) { forbidList.push([R - m, R + w + m]); return R; }
+  // Helpers: intervals dans un bloc et calcul d’espaces libres (sans superpositions)
+  function blockBuildingIntervals(block, extra=280){
+    const out=[];
+    for(const bld of buildings){
+      const L=bld.x, R=bld.x+bld.dw;
+      if(R<block.xL || L>block.xR) continue;       // pas dans ce bloc
+      out.push([L-extra, R+extra]);
+    }
+    out.sort((a,b)=>a[0]-b[0]);
+    // fusion
+    const merged=[];
+    for(const seg of out){
+      if(!merged.length || seg[0] > merged[merged.length-1][1]) merged.push(seg);
+      else merged[merged.length-1][1] = Math.max(merged[merged.length-1][1], seg[1]);
+    }
+    return merged;
+  }
+  function subtractSpan([a,b],[c,d]){
+    if(d<=a || c>=b) return [[a,b]];         // disjoint
+    const res=[];
+    if(c>a) res.push([a, Math.max(a, c)]);
+    if(d<b) res.push([Math.min(b, d), b]);
+    return res.filter(seg=>seg[1]-seg[0]>8);
+  }
+  function freeSpansInBlock(block, margin=280){
+    let spans=[[block.xL+margin, block.xR-margin]];
+    const cuts=blockBuildingIntervals(block, margin);
+    for(const cut of cuts){
+      const next=[];
+      for(const sp of spans) next.push(...subtractSpan(sp, cut));
+      spans=next;
+      if(!spans.length) break;
+    }
+    return spans;
+  }
+  function pickXFromSpans(spans, w, prefer){
+    if(!spans.length) return null;
+    // Si une préférence est donnée (milieu du bloc), essaye d’y coller
+    if(typeof prefer==='number'){
+      // trouve le span qui contient 'prefer'
+      for(const [L,R] of spans){
+        if(prefer>=L && prefer<=R){
+          const maxX=Math.max(L, Math.min(R-w, prefer));
+          return Math.max(L, Math.min(maxX, prefer));
         }
       }
-      // 4) pas de place → null
-      return null;
+    }
+    // sinon random sur un span au hasard
+    const s=spans[Math.floor(Math.random()*spans.length)];
+    const L=s[0], R=s[1];
+    if(R-L<=w) return null;
+    return Math.floor(rnd(L, R-w));
+  }
+  function addLocalForbid(spans, x, w, pad=260){
+    // Retire de 'spans' la fenêtre [x-pad, x+w+pad]
+    const cut=[x-pad, x+w+pad];
+    const next=[];
+    for(const sp of spans) next.push(...subtractSpan(sp, cut));
+    return next;
+  }
+
+  // ---------- Bâtiment Kaito (immédiatement avant Kaito) ----------
+  // On INSÈRE son bâtiment après la génération des 3 bâtiments par bloc (donc il s’ajoute)
+  if (images.buildingKaito) {
+    const base = images.buildingKaito[0];
+    const s  = BUILDING_TARGET_H / base.height;
+    const dw = Math.round(base.width * s);
+    const dh = Math.round(base.height * s);
+
+    const block = blockRects[kaitoBlockBld];
+    // On calcule les zones libres dans ce bloc, puis on impose le bâtiment Kaito près du bord droit
+    let spans = freeSpansInBlock(block, 300);
+    // cible: un peu avant le milieu (pour laisser Kaito PNJ à droite)
+    let prefer = Math.round(block.mid - dw - 220);
+    let bx = pickXFromSpans(spans, dw, prefer);
+    if (bx === null) {
+      // relax marges si nécessaire
+      for(const m of [240,200,160,120,80]){
+        spans = freeSpansInBlock(block, m);
+        bx = pickXFromSpans(spans, dw, prefer);
+        if(bx!==null) break;
+      }
+      // dernier recours: clamp dans le bloc (peut se rapprocher mais sans chevaucher car basé sur spans)
+      if(bx===null){
+        const min=block.xL+120, max=block.xR-120-dw;
+        bx=Math.max(min, Math.min(max, prefer));
+      }
+    }
+    const by = GROUND_Y - dh;
+    const roof = makeRoof(bx, by, dw, dh);
+
+    buildings.push({
+      id: nextBId++, typeId: 98,
+      frames: [images.buildingKaito[0], images.buildingKaito[1] || images.buildingKaito[0]],
+      animT: 0, x: bx, y: by, dw, dh, roof,
+      doorX: bx, doorW: dw,
+      canEnterPossible: false
+    });
+  }
+
+  // ---------- PNJ : 1 par bloc (Aeron tôt, Kaito bloc suivant) ----------
+  const firstThird = Math.max(1, Math.floor(NUM_BLOCKS / 3));
+  let aeronPlaced = false;
+
+  for (let b = 0; b < NUM_BLOCKS; b++) {
+    const block = blockRects[b];
+    // Choix type
+    let type='kahikoans';
+    if (!aeronPlaced && b < firstThird) { type='aeron'; aeronPlaced=true; }
+    else if (Math.random()<0.40)        { type='maonis'; }
+    if (b===kaitoBlockNPC)              { type='kaito'; }
+
+    // Spans libres dans le bloc (sans chevaucher les bâtiments)
+    let spans = freeSpansInBlock(block, 280);
+    let px = pickXFromSpans(spans, 200, block.mid + rint(-140,140));
+    if(px===null){
+      for(const m of [240,200,160,120,80]){
+        spans = freeSpansInBlock(block, m);
+        px = pickXFromSpans(spans, 200, block.mid);
+        if(px!==null) break;
+      }
+    }
+    if (px!==null){
+      npcs.push({ type, x:px, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
+    }
+  }
+
+  // ---------- Posters : 1 par bloc (au sol), sans chevaucher PNJ du bloc ----------
+  for (let b = 0; b < NUM_BLOCKS; b++) {
+    const block = blockRects[b];
+    // spans libres vs bâtiments
+    let spans = freeSpansInBlock(block, 280);
+
+    // évite chevauchement avec le PNJ du bloc (si présent)
+    const npcHere = npcs.find(n=> n.x>=block.xL && n.x<=block.xR);
+    if(npcHere){
+      // retire une bande autour du PNJ
+      spans = addLocalForbid(spans, npcHere.x-100, 200, 220);
     }
 
-    // ---------- Bâtiment Kaito (immédiatement avant Kaito) ----------
-    if (images.buildingKaito) {
-      const base = images.buildingKaito[0];
-      const s  = BUILDING_TARGET_H / base.height;
-      const dw = Math.round(base.width * s);
-      const dh = Math.round(base.height * s);
-
-      const block = blockRects[kaitoBlockBld];
-      let bx = placeInBlock(block.mid - (dw + 220), dw, block, forbid, 40, 220);
-      if (bx === null) {
-        // fallback sans collision: centré dans le bloc
-        const min = block.xL + 220, max = block.xR - 220 - dw;
-        bx = Math.max(min, Math.min(max, block.mid - dw - 220));
-      }
-      const by = GROUND_Y - dh;
-      const roof = makeRoof(bx, by, dw, dh);
-
-      buildings.push({
-        id: nextBId++, typeId: 98,
-        frames: [images.buildingKaito[0], images.buildingKaito[1] || images.buildingKaito[0]],
-        animT: 0, x: bx, y: by, dw, dh, roof,
-        doorX: bx, doorW: dw,
-        canEnterPossible: false
-      });
-      forbid.push([bx - 420, bx + dw + 420]);
-
-      // Kaito PNJ calé à DROITE du building Kaito
-      if (images.npcs?.kaito?.length) {
-        let kaitoX = bx + dw + 180;
-        forbid.push([kaitoX - 300, kaitoX + 300]);
-        for (let i = npcs.length - 1; i >= 0; i--) if (npcs[i].type === 'kaito') npcs.splice(i,1);
-        npcs.push({ type:'kaito', x:kaitoX, frames:images.npcs.kaito, animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
-      }
+    const px = pickXFromSpans(spans, POSTER_SIZE, block.mid + rint(-120,120));
+    if (px!==null){
+      posters.push({ x:px, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
+    } else {
+      // fallback: si vraiment pas de place, on le met côté gauche du bloc, marges réduites (jamais *dans* un bâtiment)
+      let fallback = freeSpansInBlock(block, 80);
+      const p2 = pickXFromSpans(fallback, POSTER_SIZE, block.xL+120);
+      if(p2!==null) posters.push({ x:p2, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
+      // sinon on skip ce bloc (cas ultra rare)
     }
+  }
 
-    // ---------- PNJ : 1 par bloc ----------
-    const firstThird = Math.max(1, Math.floor(NUM_BLOCKS / 3));
-    let aeronPlaced = false;
+  // ---------- Position précise du PNJ Kaito à droite de son bâtiment ----------
+  // (remplace si la boucle PNJ l’a créé ailleurs)
+  const kaitoBuilding = buildings.find(bd=>bd.typeId===98);
+  if(kaitoBuilding && images.npcs?.kaito?.length){
+    for(let i=npcs.length-1;i>=0;i--) if(npcs[i].type==='kaito') npcs.splice(i,1);
+    const kx = kaitoBuilding.x + kaitoBuilding.dw + 180; // 180 px à droite du building Kaito
+    npcs.push({ type:'kaito', x:kx, frames:images.npcs.kaito, animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
+  }
 
-    for (let b = 0; b < NUM_BLOCKS; b++) {
-      const block = blockRects[b];
-      let type = 'kahikoans';
-      if (!aeronPlaced && b < firstThird) { type = 'aeron'; aeronPlaced = true; }
-      else if (Math.random() < 0.40)      { type = 'maonis'; }
-      if (b === kaitoBlockNPC)            { type = 'kaito'; }
+  // ---------- Mur de fin juste après le dernier bloc ----------
+  worldEndX = Math.max(
+    ...buildings.map(b => b.x + b.dw),
+    ...posters.map(p => p.x + p.w),
+    ...npcs.map(n => n.x + 200)
+  ) + 1200;
 
-      const px = placeInBlock(block.mid + rint(-140,140), 200, block, forbid, 24, 280);
-      if (px !== null) {
-        npcs.push({ type, x:px, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
-      }
-    } // <<<<<< FERMETURE manquante ajoutée
-
-    // ---------- Posters : 1 par bloc (10 au total, au sol) ----------
-    const POSTER_W = POSTER_SIZE;
-    for (let b = 0; b < NUM_BLOCKS; b++) {
-      const block = blockRects[b];
-      const px = placeInBlock(block.mid + rint(-120,120), POSTER_W, block, forbid, 24, 280);
-      if (px !== null) {
-        posters.push({ x:px, y: GROUND_Y - POSTER_SIZE, w:POSTER_SIZE, h:POSTER_SIZE, t:0, taking:false, taken:false });
-      }
-    } // <<<<<< FERMETURE manquante ajoutée
-
-    // ---------- Mur de fin juste après le dernier bloc ----------
-    worldEndX = Math.max(
-      ...buildings.map(b => b.x + b.dw),
-      ...posters.map(p => p.x + p.w),
-      ...npcs.map(n => n.x + 200)
-    ) + 1200;
-
-    spawnEndWall();
-  } // <<<<<< FIN buildWorld()
+  spawnEndWall();
+ // <<<<<< FIN buildWorld()
 
   function spawnEndWall(){
     if(!images.buildingWall) return;
