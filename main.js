@@ -50,12 +50,11 @@ addEventListener('resize',resize);
 
 
   /* ========== Gate / HUD ========== */
-  const gate=document.getElementById('gate');
-  const startBtn=document.getElementById('startBtn');
-  const hud=document.getElementById('hud');
+  const gate = document.getElementById('gate');
+  const startBtn = document.getElementById('startBtn');
+  const hud = document.getElementById('hud');
 
-  let postersCount=0, eggs=0;
-  let postersCount=0, eggs=0;
+  let postersCount = 0, eggs = 0;          // ← UNE SEULE FOIS
   const POSTERS_TOTAL = 10;
 
   const scoreEl = document.getElementById('scoreNum');
@@ -73,7 +72,7 @@ addEventListener('resize',resize);
     return e;
   })();
 
-  // Variables utilisées par checkAllComplete (doivent exister AVANT tout appel)
+  // Variables utilisées par checkAllComplete (déclarées AVANT toute utilisation)
   let allCompleteOverlay = null;
   let allCompleteTimerId = null;
   let allCompleteShown   = false;
@@ -89,7 +88,6 @@ addEventListener('resize',resize);
 
   setWanted();
   setEggs();
-
 
 
   /* ========== Audio ========== */
