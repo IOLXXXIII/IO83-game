@@ -40,6 +40,19 @@ html,body{
   object-fit:contain; /* garde le ratio, occupe au max */
   image-rendering:pixelated;
 }
+
+/* Le titre ne doit pas capturer la souris */
+#gate .title,
+#gate .title img {
+  pointer-events: none;
+}
+
+/* Le bouton doit être tout en haut dans #gate */
+#gate button {
+  z-index: 10;
+}
+
+
 /* Animation 2 frames du titre */
 #title1{ animation:titleSwapA 1.1s steps(1) infinite; }
 #title2{ animation:titleSwapB 1.1s steps(1) infinite; }
