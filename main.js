@@ -127,9 +127,10 @@
   let lastTapL=-999,lastTapR=-999,dashTimer=0,dashCooldown=0,airDashUsed=0;
 
   /* ========== Camera lookahead & micro shake ========== */
-const LOOKAHEAD_MAX = 140;     // px max
+const LOOKAHEAD_MAX = 14;     // px max
 const LOOK_SMOOTH   = 8;       // suivi (plus grand = plus rapide)
-const LOOK_DASH_BONUS = 40;    // petit bonus pendant dash
+const LOOK_DASH_BONUS = 4;    // petit bonus pendant dash
+const DASH_TRAIL_OFF = 60; // px de séparation horizontale du trail vs le perso
 let camLookX = 0;              // valeur lissée du lookahead X
 let shakeAmp = 0;              // amplitude écran
 function addShake(s){ shakeAmp = Math.min(6, shakeAmp + s); }
@@ -161,6 +162,10 @@ function drawFX(yOff){
     ctx.drawImage(img, sx, sy, dw, dh);
   }
 }
+
+const DUST_ON_TAKEOFF = true;   // poussière au décollage (depuis sol/toit)
+const DUST_ON_LANDING = false;  // pas de poussière à l’atterrissage
+
   
   // Toits
   let onPlatform=false, dropThrough=0; let downPressedEdge=false;
@@ -481,10 +486,20 @@ function buildWorld(){
     const footPad=Math.round(dh*FOOT_PAD_RATIO);
     const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff + footPad;
     if(dashTimer>0 && images.dashTrail.length){
-      const ti=images.dashTrail[Math.floor(player.animTime*9)%images.dashTrail.length];
-      ctx.save(); if(player.facing==='left'){ ctx.translate(x+dw/2-16,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); } else ctx.translate(x-16,y);
-      ctx.globalAlpha=0.85; ctx.drawImage(ti,0,0,dw,dh); ctx.restore();
-    }
+  const ti = images.dashTrail[Math.floor(player.animTime*9)%images.dashTrail.length];
+  ctx.save();
+  if(player.facing==='left'){
+    ctx.translate(x + dw/2 - DASH_TRAIL_OFF, y);
+    ctx.scale(-1,1);
+    ctx.translate(-dw/2, 0);
+  } else {
+    ctx.translate(x - DASH_TRAIL_OFF, y);
+  }
+  ctx.globalAlpha = 0.85;
+  ctx.drawImage(ti, 0, 0, dw, dh);
+  ctx.restore();
+}
+
     ctx.save();
     if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img,0,0,dw,dh); }
     else ctx.drawImage(img,x,y,dw,dh);
@@ -549,7 +564,7 @@ function buildWorld(){
       if(airDashUsed>=max) return;
       airDashUsed++; dashCooldown=DASH_COOL_A;
     }else{ airDashUsed=0; dashCooldown=DASH_COOL_G; }
-    dashTimer=DASH_DUR; player.facing=dir; addShake(1.0); sfx.dash?.play().catch(()=>{});
+    dashTimer = DASH_DUR; player.facing = dir; addShake(0.1); sfx.dash?.play().catch(()=>{});
   }
 
   /* ========== Loops ========== */
@@ -579,21 +594,21 @@ function buildWorld(){
 // Jump (variable height + FX)
 if(jumpBuf>0){
   if(player.onGround || coyote>0){
+    // Décollage depuis le sol / un toit
     player.vy = -JUMP_VELOCITY;
     player.onGround = false;
     jumpBuf = 0;
-    spawnDust(player.x, GROUND_Y + player.y);
-    addShake(0.8);
+    if(DUST_ON_TAKEOFF) spawnDust(player.x, GROUND_Y + player.y); // FIXE au sol, à l'endroit du saut
     sfx.jump?.play().catch(()=>{});
   } else if(airJumpsUsed < AIR_JUMPS){
+    // Double saut en l’air -> PAS de poussière
     airJumpsUsed++;
     player.vy = -JUMP_VELOCITY;
     jumpBuf = 0;
-    spawnDust(player.x, GROUND_Y + player.y);
-    addShake(0.6);
     sfx.jump?.play().catch(()=>{});
   }
 }
+
 
 // Gravity (variable jump height)
 if(dashTimer<=0){
@@ -649,8 +664,9 @@ if (GROUND_Y + player.y > GROUND_Y) {
 if(!wasOnGround && player.onGround){
   const impact = Math.min(4, Math.abs(vyBefore)/600);
   addShake(impact>0.6 ? impact : 0.6);
-  spawnDust(player.x, GROUND_Y + player.y);
+  if(DUST_ON_LANDING) spawnDust(player.x, GROUND_Y + player.y);
 }
+
 
     
     // PNJ talk
