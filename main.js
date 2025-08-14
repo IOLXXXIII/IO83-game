@@ -127,9 +127,9 @@
   let lastTapL=-999,lastTapR=-999,dashTimer=0,dashCooldown=0,airDashUsed=0;
 
   /* ========== Camera lookahead & micro shake ========== */
-const LOOKAHEAD_MAX = 14;     // px max
+const LOOKAHEAD_MAX = 0;     // px max
 const LOOK_SMOOTH   = 8;       // suivi (plus grand = plus rapide)
-const LOOK_DASH_BONUS = 4;    // petit bonus pendant dash
+const LOOK_DASH_BONUS = 10;    // petit bonus pendant dash
 const DASH_TRAIL_OFF = 60; // px de séparation horizontale du trail vs le perso
 let camLookX = 0;              // valeur lissée du lookahead X
 let shakeAmp = 0;              // amplitude écran
@@ -564,7 +564,7 @@ function buildWorld(){
       if(airDashUsed>=max) return;
       airDashUsed++; dashCooldown=DASH_COOL_A;
     }else{ airDashUsed=0; dashCooldown=DASH_COOL_G; }
-    dashTimer = DASH_DUR; player.facing = dir; addShake(0.1); sfx.dash?.play().catch(()=>{});
+    dashTimer = DASH_DUR; player.facing = dir; addShake(0.4); sfx.dash?.play().catch(()=>{});
   }
 
   /* ========== Loops ========== */
