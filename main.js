@@ -56,11 +56,19 @@ addEventListener('resize',resize);
 
   let postersCount=0, eggs=0;
   const POSTERS_TOTAL = 10;
-  const scoreEl=document.getElementById('scoreNum');
-  const eggBox=(()=>{ let e=document.getElementById('eggNum'); if(!e){ const box=document.createElement('div'); box.id='eggs'; box.innerHTML='??? <span id="eggNum">0/10</span>'; hud.appendChild(box); e=box.querySelector('#eggNum'); } return e; })();
+const scoreEl=document.getElementById('scoreNum');
+const eggBox=(()=>{ /* ... */ })();
+
+// >>> AJOUTER CES 3 LIGNES ICI (avant tout appel à checkAllComplete)
+let allCompleteOverlay = null;
+let allCompleteTimerId = null;
+let allCompleteShown   = false;
+// <<<
+
 const setWanted=()=>{ if(scoreEl) scoreEl.textContent=`${postersCount}/10`; checkAllComplete(); };
 const setEggs=()=>{ eggBox.textContent=`${eggs}/10`; checkAllComplete(); };
-  setWanted(); setEggs();
+setWanted(); setEggs();
+
 
   /* ========== Audio ========== */
   const bgm=document.getElementById('bgm');
@@ -256,7 +264,6 @@ const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
     panel.appendChild(img); panel.appendChild(btn); wrap.appendChild(panel); document.body.appendChild(wrap); postersOverlay=wrap; return wrap;
   }
 
-  let allCompleteOverlay=null, allCompleteTimerId=null, allCompleteShown=false;
 function ensureAllCompleteOverlay(){
   if(allCompleteOverlay) return allCompleteOverlay;
   const wrap=document.createElement('div');
