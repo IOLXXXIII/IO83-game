@@ -689,12 +689,6 @@ function drawMyo(runVel,yOff,H=MYO_H){
 }
 
 
-
-    ctx.save();
-    if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img,0,0,dw,dh); }
-    else ctx.drawImage(img,x,y,dw,dh);
-    ctx.restore();
-  }
   function drawBuildings(yOff){
     for(const b of buildings){
       const sx=Math.floor(b.x - cameraX); if(sx<-2200 || sx>canvas.width/DPR+2200) continue;
