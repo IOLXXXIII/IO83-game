@@ -137,7 +137,7 @@ try{
   }
 
   /* ========== Assets ========== */
-  const CB='';
+  const CB='?v='+(Date.now());
   const ASSETS={
     back :'assets/background/bg_far.png'+CB,
     mid  :'assets/background/bg_mid.png'+CB,
@@ -267,7 +267,7 @@ addEventListener('keyup',e=>{
   if(e.key==='ArrowUp'||e.key==='w') jumpHeld=false;
 });
   
-  const player={x:0,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
+  const player={x:220,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
 
 /* ========== Posters ========== */
 const POSTER_SIZE=Math.round(100*1.2);
@@ -278,7 +278,7 @@ const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
     if(postersOverlay) return postersOverlay;
     const wrap=document.createElement('div'); Object.assign(wrap.style,{position:'fixed',inset:'0',display:'none',placeItems:'center',background:'rgba(0,0,0,.6)',zIndex:'9998'});
     const panel=document.createElement('div'); Object.assign(panel.style,{padding:'16px',background:'#111',border:'2px solid #444',borderRadius:'12px'});
-    const img=document.createElement('img'); img.alt='Completed'; img.style.maxWidth='min(80vw,800px)'; img.style.maxHeight='70vh'; img.style.imageRendering='pixelated'; img.src=ASSETS.postersCompletePNG.split('?')[0];
+    const img=document.createElement('img'); img.alt='Completed'; img.style.maxWidth='min(80vw,800px)'; img.style.maxHeight='70vh'; img.style.imageRendering='pixelated'; img.src = ASSETS.postersCompletePNG;
     const btn=document.createElement('button'); btn.textContent='Close'; Object.assign(btn.style,{display:'block',margin:'12px auto 0',padding:'8px 16px',cursor:'pointer',background:'#1b1b1b',color:'#fff',border:'1px solid #555',borderRadius:'8px'});
     btn.onclick=()=>{ wrap.style.display='none'; };
     panel.appendChild(img); panel.appendChild(btn); wrap.appendChild(panel); document.body.appendChild(wrap); postersOverlay=wrap; return wrap;
@@ -295,7 +295,7 @@ function ensureAllCompleteOverlay(){
   img.style.maxWidth='min(80vw,800px)';
   img.style.maxHeight='70vh';
   img.style.imageRendering='pixelated';
-  img.src=ASSETS.allCompletePNG.split('?')[0];
+  img.src = ASSETS.allCompletePNG;
   const btn=document.createElement('button');
   btn.textContent='Close';
   Object.assign(btn.style,{display:'block',margin:'12px auto 0',padding:'8px 16px',cursor:'pointer',background:'#1b1b1b',color:'#fff',border:'1px solid #555',borderRadius:'8px'});
@@ -952,6 +952,10 @@ camYOffset += shY;
   }
 
   function updateInterior(dt){
+          // Re-affiche "ALL COMPLETE" si on est déjà à 10/10 et qu'on relance un terminal
+      if (eggIndex >= 10) {
+        ensureAllCompleteOverlay().style.display = 'grid';
+      }
     const W=canvas.width/DPR, H=canvas.height/DPR;
     // headroom : sol plus bas, plafond reculé
     const floorY=H-48, ceilY=-300;
