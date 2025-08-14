@@ -14,7 +14,8 @@
 
   /* ========== Canvas ========== */
   const canvas=document.getElementById('game');
-  const ctx=canvas.getContext('2d',{alpha:false});
+  let ctx = canvas.getContext('2d', {alpha:false});
+if(!ctx) ctx = canvas.getContext('2d'); // fallback anciens navigateurs
   const DPR=Math.max(1,Math.floor(window.devicePixelRatio||1));
   function resize(){ const w=1280,h=720; canvas.width=w*DPR; canvas.height=h*DPR; ctx.imageSmoothingEnabled=false; ctx.setTransform(DPR,0,0,DPR,0,0); }
   resize(); addEventListener('resize',resize);
@@ -47,7 +48,13 @@ const setEggs=()=>{ eggBox.textContent=`${eggs}/10`; checkAllComplete(); };
     getout:document.getElementById('sfxGetOut'),
     postersComplete:document.getElementById('sfxPostersComplete')
   };
-  Object.values(sfx).forEach(a=>{ if(a) a.volume=(a===bgm?1:0.8)*(a?.volume||1); });
+  Object.values(sfx).forEach(a=>{
+  if(!a) return;
+  const base = (a===bgm ? 1 : 0.8);
+  const cur  = (typeof a.volume === 'number') ? a.volume : 1;
+  a.volume = base * cur;
+});
+
   if(sfx.foot) sfx.foot.volume=0.7;
   const startAudio=()=>{ if(bgm){ bgm.muted=false; bgm.volume=0.6; bgm.currentTime=0; bgm.play().catch(()=>{});} };
   const footPlay=()=>{ if(!sfx.foot) return; if(sfx.foot.paused) sfx.foot.play().catch(()=>{}); sfx.foot.playbackRate=0.96+Math.random()*0.08; };
@@ -300,11 +307,18 @@ function checkAllComplete(){
     for(const k of Object.keys(ASSETS.npcs)) for(const s of ASSETS.npcs[k]) images.npcs[k].push(await L(s));
     try{
       const r=await fetch(ASSETS.dialogsManifest); const mf=await r.json();
-      for(const k of ['aeron','kaito','maonis','kahikoans']){
-        const list=mf[k]||[]; for(const name of list){
-          const p=`assets/ui/dialogs/${k}/${name}${CB}`; const i=await loadImg(p); if(i) (images.dialogs[k]??=[]).push(i);
-        }
-      }
+for(const k of ['aeron','kaito','maonis','kahikoans']){
+  const list = mf[k] || [];
+  for(const name of list){
+    const p = `assets/ui/dialogs/${k}/${name}${CB}`;
+    const i = await loadImg(p);
+    if(i){
+      if(!images.dialogs[k]) images.dialogs[k] = [];
+      images.dialogs[k].push(i);
+    }
+  }
+}
+
     }catch{}
     for(const [a,b,id] of ASSETS.buildings) images.buildings.push([await L(a), (await L(b))||null, id]);
     { const ka=await L(ASSETS.buildingKaito[0]); const kb=ka? await L(ASSETS.buildingKaito[1]):null; images.buildingKaito=ka?[ka,kb||ka]:null; }
@@ -578,12 +592,14 @@ if(dashTimer>0 && images.dashTrail.length){
       else ctx.drawImage(img,sx,sy,dw,dh);
       ctx.restore();
 
-      if(n.show){
-        if(!n.dialogImg && images.dialogs[n.type]?.length){
-          const list=images.dialogs[n.type];
-          n.dialogImg=list[n.dialogIdx++ % list.length];
-        }
-      }else n.dialogImg=null;
+if(n.show){
+  const list = images.dialogs[n.type];
+  if(!n.dialogImg && list && list.length){
+    n.dialogImg = list[n.dialogIdx++ % list.length];
+  }
+}else{
+  n.dialogImg = null;
+}
 
       if(n.dialogImg){
         const scale=0.72, bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
@@ -617,7 +633,8 @@ if(dashTimer>0 && images.dashTrail.length){
       if(airDashUsed>=max) return;
       airDashUsed++; dashCooldown=DASH_COOL_A;
     }else{ airDashUsed=0; dashCooldown=DASH_COOL_G; }
-    dashTimer = DASH_DUR; player.facing = dir; addShake(0.4); sfx.dash?.play().catch(()=>{});
+    dashTimer = DASH_DUR; player.facing = dir; addShake(0.4); if(sfx.dash) sfx.dash.play().catch(()=>{});
+
   }
 
   /* ========== Loops ========== */
@@ -657,13 +674,14 @@ if(jumpBuf>0){
     player.onGround = false;
     jumpBuf = 0;
     if(DUST_ON_TAKEOFF) spawnDust(player.x, GROUND_Y + player.y); // pied réel (sans footPad)
-    sfx.jump?.play().catch(()=>{});
+    if(sfx.jump) sfx.jump.play().catch(()=>{});
   } else if(airJumpsUsed < AIR_JUMPS){
     // Double saut en l’air -> PAS de poussière
     airJumpsUsed++;
     player.vy = -JUMP_VELOCITY;
     jumpBuf = 0;
-    sfx.jump?.play().catch(()=>{});
+    if(sfx.jump) sfx.jump.play().catch(()=>{});
+
   }
 }
 
@@ -741,7 +759,7 @@ if(!wasOnGround && player.onGround){
       const feetY=GROUND_Y-110+player.y;
       const over=aabb(player.x-26,feetY,52,110, p.x,p.y,p.w,p.h);
       if(!p.taken && !p.taking && dx<=COLLECT_RADIUS && over && wantsDown){ p.taking=true; p.t=0; }
-      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount++; setWanted(); sfx.wanted?.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){ sfx.postersComplete?.play().catch(()=>{}); ensureOverlay().style.display='grid'; } } }
+      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount++; setWanted(); if(sfx.wanted) sfx.wanted.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){ if(sfx.postersComplete) sfx.postersComplete.play().catch(()=>{}); ensureOverlay().style.display='grid'; } } }
     }
 
     // Portes
@@ -758,13 +776,13 @@ if (b.canEnterPossible){
   enterInterior(b);
   break;
 } else {
-  sfx.doorLocked?.play().catch(()=>{});
+  if(sfx.doorLocked) sfx.doorLocked.play().catch(()=>{});
   break;
 }
         }
       }
       if(endWall){
-        if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) sfx.getout?.play().catch(()=>{});
+        if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) if(sfx.getout) sfx.getout.play().catch(()=>{});
       }
     }
 
@@ -813,7 +831,7 @@ camYOffset += shY;
     player.x=60; player.y=12; player.vy=0; player.onGround=true; player.facing='right';
   }
   function exitInterior(){
-    mode='world'; if(bgm){ bgm.volume=0.6; } sfx.exit?.play().catch(()=>{});
+    mode='world'; if(bgm){ bgm.volume=0.6; } if(sfx.exit) sfx.exit.play().catch(()=>{});
     if(currentB){ player.x=currentB.doorX+currentB.doorW/2; player.y=0; player.vy=0; player.onGround=true; }
     currentB=null;
   }
@@ -836,8 +854,8 @@ camYOffset += shY;
     jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
 
     if(jumpBuf>0){
-      if(player.onGround||coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
-      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; sfx.jump?.play().catch(()=>{}); }
+      if(player.onGround||coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
+      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
     }
     if(dashTimer<=0){
   if(player.vy<0){
@@ -862,11 +880,11 @@ camYOffset += shY;
     const myoH=MYO_H_INTERIOR, myoRect={ x:player.x-24, y:(floorY - myoH + player.y + INTERIOR_FOOT_EXTRA), w:48, h:myoH };
     const inTerm=aabb(myoRect.x,myoRect.y,myoRect.w,myoRect.h, term.x,term.y,term.w,term.h);
 
-    if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; sfx.type?.play().catch(()=>{}); }
+    if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; if(sfx.type) sfx.type.play().catch(()=>{}); }
     if(hacking){
       hackT+=dt;
       if(hackT>=1.5){
-        hacking=false; hackT=0; sfx.ding?.play().catch(()=>{});
+        hacking=false; hackT=0; if(sfx.ding) sfx.ding.play().catch(()=>{});
         if(currentB && !hackedIds.has(currentB.id)){
           hackedIds.add(currentB.id);
           eggIndex=Math.min(10,eggIndex+1); eggs=eggIndex; setEggs();
