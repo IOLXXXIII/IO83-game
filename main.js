@@ -76,6 +76,8 @@ addEventListener('resize',resize);
   let allCompleteOverlay = null;
   let allCompleteTimerId = null;
   let allCompleteShown   = false;
+  let pendingAllComplete = false;
+
 
   const setWanted = () => {
     if (scoreEl) scoreEl.textContent = `${postersCount}/10`;
@@ -165,7 +167,7 @@ try{
     jumpDust : Array.from({length:16},(_,i)=>`assets/fx/jump_dust_${i+1}.png${CB}`),
     interiorClosedIdle:['assets/interiors/interior_closed_idle_1.png'+CB,'assets/interiors/interior_closed_idle_2.png'+CB],
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
-  postersCompletePNG:'assets/ui/posters_complete.png'+CB,
+  postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
   allCompletePNG:'assets/collectibles/all_complete.png'+CB
   };
 const images={
@@ -270,7 +272,7 @@ addEventListener('keyup',e=>{
   const player={x:220,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
 
 /* ========== Posters ========== */
-const POSTER_SIZE=Math.round(100*1.2);
+const POSTER_SIZE=Math.round(100*1.2*1.15);
 const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[];
   let postersOverlay=null;
@@ -650,6 +652,7 @@ function buildWorld(){
     let x0=-Math.floor((cameraX*f)%dw); if(x0>0) x0-=dw;
     for(let x=x0;x<W;x+=dw) ctx.drawImage(img, Math.round(x), Math.round(y), dw, dh);
   }
+  
 function drawMyo(runVel,yOff,H=MYO_H){
   const frames=(Math.abs(runVel)>1e-2?images.myoWalk:images.myoIdle);
   const fps=(Math.abs(runVel)>1e-2?8:4);
@@ -659,19 +662,29 @@ function drawMyo(runVel,yOff,H=MYO_H){
   const s=H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
   const footPad=Math.round(dh*FOOT_PAD_RATIO);
 
-  // ✅ on centre le sprite sur player.x (donc poussière = pile dessous)
+  // Sprite centré sur player.x
   const x=Math.floor(player.x - cameraX - dw/2);
   const y=GROUND_Y - dh + player.y + yOff + footPad;
 
-  // Dash trail (reste correct avec centrage)
+  // Dash trail — symétrique + flip à gauche
   if(dashTimer>0 && images.dashTrail.length){
     const ti = images.dashTrail[Math.floor(player.animTime * DASH_TRAIL_FPS) % images.dashTrail.length];
-    const c  = x + dw/2;                                // centre visuel du perso
-    const cx = (player.facing==='left') ? (c + DASH_TRAIL_OFF) : (c - DASH_TRAIL_OFF);
-    const sx = Math.round(cx - dw/2);                   // place le trail par son centre
+    const c  = x + dw/2; // centre du perso
+    const cx = c + (player.facing==='left' ? +DASH_TRAIL_OFF : -DASH_TRAIL_OFF);
+    const sx = Math.round(cx - dw/2);
+    const sy = Math.round(y);
+
     ctx.save();
     ctx.globalAlpha = 0.85;
-    ctx.drawImage(ti, sx, Math.round(y), dw, dh);
+    if(player.facing==='left'){
+      // flip du trail autour de son centre → parfait miroir
+      ctx.translate(sx + dw/2, sy + dh/2);
+      ctx.scale(-1,1);
+      ctx.translate(-dw/2, -dh/2);
+      ctx.drawImage(ti, 0, 0, dw, dh);
+    }else{
+      ctx.drawImage(ti, sx, sy, dw, dh);
+    }
     ctx.restore();
   }
 
@@ -687,6 +700,8 @@ function drawMyo(runVel,yOff,H=MYO_H){
   }
   ctx.restore();
 }
+
+  
   function drawBuildings(yOff){
     for(const b of buildings){
       const sx=Math.floor(b.x - cameraX); if(sx<-2200 || sx>canvas.width/DPR+2200) continue;
@@ -891,7 +906,9 @@ if (b.canEnterPossible){
   enterInterior(b);
   break;
 } else {
-  if(sfx.doorLocked) sfx.doorLocked.play().catch(()=>{});
+  if(sfx.doorLocked){
+    try { sfx.doorLocked.currentTime = 0; sfx.doorLocked.play(); } catch(_){}
+  }
   break;
 }
         }
@@ -945,17 +962,31 @@ camYOffset += shY;
     interiorOpenIdx=0; hacking=false; hackT=0;
     player.x=60; player.y=12; player.vy=0; player.onGround=true; player.facing='right';
   }
-  function exitInterior(){
-    mode='world'; if(bgm){ bgm.volume=0.6; } if(sfx.exit) sfx.exit.play().catch(()=>{});
-    if(currentB){ player.x=currentB.doorX+currentB.doorW/2; player.y=0; player.vy=0; player.onGround=true; }
-    currentB=null;
+function exitInterior(){
+  mode='world';
+  if(bgm){ bgm.volume=0.6; }
+  if(sfx.exit) sfx.exit.play().catch(()=>{});
+
+  if(currentB){
+    player.x=currentB.doorX+currentB.doorW/2;
+    player.y=0; player.vy=0; player.onGround=true;
   }
 
-  function updateInterior(dt){
-          // Re-affiche "ALL COMPLETE" si on est déjà à 10/10 et qu'on relance un terminal
-      if (eggIndex >= 10) {
-        ensureAllCompleteOverlay().style.display = 'grid';
-      }
+  const shouldShow = pendingAllComplete;
+  pendingAllComplete = false;
+  currentB = null;
+
+  if(shouldShow){
+    setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; }, 2000);
+  }
+}
+
+
+// Re-affiche "ALL COMPLETE" si on est déjà à 10/10 et qu'on relance un terminal
+if (eggIndex >= 10) {
+  ensureAllCompleteOverlay().style.display = 'grid';
+}
+
     const W=canvas.width/DPR, H=canvas.height/DPR;
     // headroom : sol plus bas, plafond reculé
     const floorY=H-48, ceilY=-300;
@@ -1009,6 +1040,7 @@ camYOffset += shY;
           eggIndex=Math.min(10,eggIndex+1); eggs=eggIndex; setEggs();
         }
         interiorOpenIdx=Math.max(1,eggIndex); // 1→10
+        if (eggIndex >= 10) pendingAllComplete = true;
       }
     }
 
