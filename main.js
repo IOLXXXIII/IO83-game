@@ -650,22 +650,41 @@ function buildWorld(){
     let x0=-Math.floor((cameraX*f)%dw); if(x0>0) x0-=dw;
     for(let x=x0;x<W;x+=dw) ctx.drawImage(img, Math.round(x), Math.round(y), dw, dh);
   }
-  function drawMyo(runVel,yOff,H=MYO_H){
-    const frames=(Math.abs(runVel)>1e-2?images.myoWalk:images.myoIdle);
-    const fps=(Math.abs(runVel)>1e-2?8:4);
-    const idx=frames.length>1?Math.floor(player.animTime*fps)%frames.length:0;
-    const img=frames[idx]||images.myoIdle[0]; if(!img) return;
-    const s=H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
-    const footPad=Math.round(dh*FOOT_PAD_RATIO);
-    const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff + footPad;
-if(dashTimer>0 && images.dashTrail.length){
-  const ti = images.dashTrail[Math.floor(player.animTime * DASH_TRAIL_FPS) % images.dashTrail.length];
-  const c  = x + dw/2;                                 // centre visuel du perso
-  const cx = (player.facing==='left') ? (c + DASH_TRAIL_OFF) : (c - DASH_TRAIL_OFF);
-  const sx = Math.round(cx - dw/2);                    // place le trail par son centre
+function drawMyo(runVel,yOff,H=MYO_H){
+  const frames=(Math.abs(runVel)>1e-2?images.myoWalk:images.myoIdle);
+  const fps=(Math.abs(runVel)>1e-2?8:4);
+  const idx=frames.length>1?Math.floor(player.animTime*fps)%frames.length:0;
+  const img=frames[idx]||images.myoIdle[0]; if(!img) return;
+
+  const s=H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
+  const footPad=Math.round(dh*FOOT_PAD_RATIO);
+
+  // ✅ on centre le sprite sur player.x (donc poussière = pile dessous)
+  const x=Math.floor(player.x - cameraX - dw/2);
+  const y=GROUND_Y - dh + player.y + yOff + footPad;
+
+  // Dash trail (reste correct avec centrage)
+  if(dashTimer>0 && images.dashTrail.length){
+    const ti = images.dashTrail[Math.floor(player.animTime * DASH_TRAIL_FPS) % images.dashTrail.length];
+    const c  = x + dw/2;                                // centre visuel du perso
+    const cx = (player.facing==='left') ? (c + DASH_TRAIL_OFF) : (c - DASH_TRAIL_OFF);
+    const sx = Math.round(cx - dw/2);                   // place le trail par son centre
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(ti, sx, Math.round(y), dw, dh);
+    ctx.restore();
+  }
+
+  // Perso
   ctx.save();
-  ctx.globalAlpha = 0.85;
-  ctx.drawImage(ti, sx, Math.round(y), dw, dh);        // pas de flip, offset miroir parfait
+  if(player.facing==='left'){
+    ctx.translate(x+dw/2,y);
+    ctx.scale(-1,1);
+    ctx.translate(-dw/2,0);
+    ctx.drawImage(img,0,0,dw,dh);
+  }else{
+    ctx.drawImage(img,x,y,dw,dh);
+  }
   ctx.restore();
 }
 
@@ -1009,7 +1028,7 @@ camYOffset += shY;
     const i2=fr2[Math.floor(player.animTime*(Math.abs(vx)>1e-2?8:4))%fr2.length]||fr2[0];
     if(i2){
       const s=MYO_H_INTERIOR/i2.height, dw=Math.round(i2.width*s), dh=Math.round(i2.height*s);
-      const x=Math.floor(player.x), y=floorY - dh + player.y + INTERIOR_FOOT_EXTRA;
+      const x=Math.floor(player.x - dw/2), y=floorY - dh + player.y + INTERIOR_FOOT_EXTRA;
       ctx.save(); if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(i2,0,0,dw,dh); } else ctx.drawImage(i2,x,y,dw,dh); ctx.restore();
     }
   }
