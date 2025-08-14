@@ -27,8 +27,8 @@
   let postersCount=0, eggs=0;
   const scoreEl=document.getElementById('scoreNum');
   const eggBox=(()=>{ let e=document.getElementById('eggNum'); if(!e){ const box=document.createElement('div'); box.id='eggs'; box.innerHTML='??? <span id="eggNum">0/10</span>'; hud.appendChild(box); e=box.querySelector('#eggNum'); } return e; })();
-  const setWanted=()=>{ if(scoreEl) scoreEl.textContent=`${postersCount}/10`; };
-  const setEggs=()=>{ eggBox.textContent=`${eggs}/10`; };
+const setWanted=()=>{ if(scoreEl) scoreEl.textContent=`${postersCount}/10`; checkAllComplete(); };
+const setEggs=()=>{ eggBox.textContent=`${eggs}/10`; checkAllComplete(); };
   setWanted(); setEggs();
 
   /* ========== Audio ========== */
@@ -95,17 +95,18 @@
     jumpDust : Array.from({length:16},(_,i)=>`assets/fx/jump_dust_${i+1}.png${CB}`),
     interiorClosedIdle:['assets/interiors/interior_closed_idle_1.png'+CB,'assets/interiors/interior_closed_idle_2.png'+CB],
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
-    postersCompletePNG:'assets/ui/posters_complete.png'+CB
+  postersCompletePNG:'assets/ui/posters_complete.png'+CB,
+  allCompletePNG:'assets/ui/all_complete.png'+CB
   };
-  const images={
-    back:null, mid:null, front:null, myoIdle:[], myoWalk:[],
-    posterWith:null, posterWithout:null,
-    npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
-    dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
-    buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
-    interiorClosedIdle:[], interiorOpens:[], postersComplete:null, jumpDust:[]
+const images={
+  back:null, mid:null, front:null, myoIdle:[], myoWalk:[],
+  posterWith:null, posterWithout:null,
+  npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
+  dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
+  buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
+  interiorClosedIdle:[], interiorOpens:[], postersComplete:null, allComplete:null, jumpDust:[]
+};
 
-  };
   const loadImg=src=>new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; });
 
   /* ========== Player / Physique ========== */
@@ -134,6 +135,9 @@ const DASH_TRAIL_OFF = 60; // px de séparation horizontale du trail vs le perso
 let camLookX = 0;              // valeur lissée du lookahead X
 let shakeAmp = 0;              // amplitude écran
 function addShake(s){ shakeAmp = Math.min(6, shakeAmp + s); }
+
+const DASH_TRAIL_FPS = 8; // ~10–11% plus lent que 9
+
 
 /* ========== Variable jump (tap court / long) ========== */
 let jumpHeld = false;          // vrai tant que ↑ (ou W) est maintenu
@@ -210,11 +214,48 @@ addEventListener('keyup',e=>{
     panel.appendChild(img); panel.appendChild(btn); wrap.appendChild(panel); document.body.appendChild(wrap); postersOverlay=wrap; return wrap;
   }
 
+  let allCompleteOverlay=null, allCompleteTimerId=null, allCompleteShown=false;
+function ensureAllCompleteOverlay(){
+  if(allCompleteOverlay) return allCompleteOverlay;
+  const wrap=document.createElement('div');
+  Object.assign(wrap.style,{position:'fixed',inset:'0',display:'none',placeItems:'center',background:'rgba(0,0,0,.6)',zIndex:'9999'});
+  const panel=document.createElement('div');
+  Object.assign(panel.style,{padding:'16px',background:'#111',border:'2px solid #444',borderRadius:'12px'});
+  const img=document.createElement('img');
+  img.alt='All Complete';
+  img.style.maxWidth='min(80vw,800px)';
+  img.style.maxHeight='70vh';
+  img.style.imageRendering='pixelated';
+  img.src=ASSETS.allCompletePNG.split('?')[0];
+  const btn=document.createElement('button');
+  btn.textContent='Close';
+  Object.assign(btn.style,{display:'block',margin:'12px auto 0',padding:'8px 16px',cursor:'pointer',background:'#1b1b1b',color:'#fff',border:'1px solid #555',borderRadius:'8px'});
+  btn.onclick=()=>{ wrap.style.display='none'; };
+  panel.appendChild(img); panel.appendChild(btn); wrap.appendChild(panel);
+  document.body.appendChild(wrap);
+  allCompleteOverlay=wrap; return wrap;
+}
+
+// Hoistée (déclarée en function) → peut être appelée depuis n’importe où
+function checkAllComplete(){
+  if(allCompleteShown) return;
+  if(eggs>=10 && postersCount>=POSTERS_TOTAL){
+    if(!allCompleteTimerId){
+      allCompleteTimerId = setTimeout(()=>{
+        ensureAllCompleteOverlay().style.display='grid';
+        allCompleteShown = true;
+      }, 10000); // 10 secondes
+    }
+  }
+}
+
+  
   /* ========== Monde & contenu ========== */
   const BUILDING_TARGET_H=Math.round(450*1.15);
 
   const buildings=[]; let nextBId=1;
   let worldStartX=480, worldEndX=20000;
+  let worldPlayerMaxX=null; // limite dure pour le centre du joueur
   let endWall=null;
 
   // toits one-way (largeur droite réduite)
@@ -272,6 +313,9 @@ addEventListener('keyup',e=>{
     for(const s of ASSETS.interiorClosedIdle){ const i=await L(s); if(i) images.interiorClosedIdle.push(i); }
     for(const s of ASSETS.interiorOpens){ const i=await L(s); if(i) images.interiorOpens.push(i); }
     images.postersComplete = await L(ASSETS.postersCompletePNG);
+    images.allComplete = await L(ASSETS.allCompletePNG);
+
+    
 
     recalcGround();
     buildWorld();
@@ -474,6 +518,8 @@ function buildWorld(){
     const x = worldEndX - 800; const y = GROUND_Y - dh;
     endWall={frames:images.buildingWall, animT:0, x, y, dw, dh};
     worldEndX = endWall.x + endWall.dw + 8; // on peut "voir" et approcher le mur
+worldEndX = endWall.x + endWall.dw + 8; // caméra peut aller au-delà pour voir le mur
+worldPlayerMaxX = Math.floor(endWall.x + endWall.dw*0.5) - PLAYER_HALF_W; // centre du joueur bloqué à la moitié du mur
 
   }
 
@@ -494,15 +540,16 @@ function buildWorld(){
     const footPad=Math.round(dh*FOOT_PAD_RATIO);
     const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff + footPad;
 if(dashTimer>0 && images.dashTrail.length){
-  const ti = images.dashTrail[Math.floor(player.animTime*9)%images.dashTrail.length];
-  const sx = (player.facing==='left')
-    ? (x + DASH_TRAIL_OFF - dw)   // offset miroir côté gauche SANS flip
-    : (x - DASH_TRAIL_OFF);       // offset côté droit
+  const ti = images.dashTrail[Math.floor(player.animTime * DASH_TRAIL_FPS) % images.dashTrail.length];
+  const c  = x + dw/2;                                 // centre visuel du perso
+  const cx = (player.facing==='left') ? (c + DASH_TRAIL_OFF) : (c - DASH_TRAIL_OFF);
+  const sx = Math.round(cx - dw/2);                    // place le trail par son centre
   ctx.save();
   ctx.globalAlpha = 0.85;
-  ctx.drawImage(ti, Math.round(sx), Math.round(y), dw, dh);
+  ctx.drawImage(ti, sx, Math.round(y), dw, dh);        // pas de flip, offset miroir parfait
   ctx.restore();
 }
+
 
 
     ctx.save();
@@ -590,7 +637,9 @@ const base        = (player.onGround ? groundSpeed : airSpeed);
       if(keys.has('ArrowRight')||keys.has('d')){ vx+=base; player.facing='right'; }
       if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=base; player.facing='left'; }
     }
-    player.x=Math.max(0, Math.min(player.x+vx*dt, worldEndX-10));
+    const hardMaxX = (worldPlayerMaxX!=null) ? worldPlayerMaxX : (worldEndX-10);
+player.x = Math.max(0, Math.min(player.x + vx*dt, hardMaxX));
+
 
     if(mode==='world'){ if(player.onGround && Math.abs(vx)>1) footPlay(); else footStop(); }
 
@@ -606,7 +655,7 @@ if(jumpBuf>0){
     player.vy = -JUMP_VELOCITY;
     player.onGround = false;
     jumpBuf = 0;
-    if(DUST_ON_TAKEOFF) spawnDust(player.x, feetYWorld()); // EXACT sous les pieds visibles
+    if(DUST_ON_TAKEOFF) spawnDust(player.x, GROUND_Y + player.y); // pied réel (sans footPad)
     sfx.jump?.play().catch(()=>{});
   } else if(airJumpsUsed < AIR_JUMPS){
     // Double saut en l’air -> PAS de poussière
@@ -672,7 +721,7 @@ if (GROUND_Y + player.y > GROUND_Y) {
 if(!wasOnGround && player.onGround){
   const impact = Math.min(4, Math.abs(vyBefore)/600);
   addShake(impact>0.6 ? impact : 0.6);
-  if(DUST_ON_LANDING) spawnDust(player.x, feetYWorld());
+  if(DUST_ON_LANDING) spawnDust(player.x, GROUND_Y + player.y); // pied réel (sans footPad)
 }
 
 
