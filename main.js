@@ -129,7 +129,7 @@
   /* ========== Camera lookahead & micro shake ========== */
 const LOOKAHEAD_MAX = 0;     // px max
 const LOOK_SMOOTH   = 8;       // suivi (plus grand = plus rapide)
-const LOOK_DASH_BONUS = 10;    // petit bonus pendant dash
+const LOOK_DASH_BONUS = 0;    // petit bonus pendant dash
 const DASH_TRAIL_OFF = 60; // px de séparation horizontale du trail vs le perso
 let camLookX = 0;              // valeur lissée du lookahead X
 let shakeAmp = 0;              // amplitude écran
@@ -166,6 +166,11 @@ function drawFX(yOff){
 const DUST_ON_TAKEOFF = true;   // poussière au décollage (depuis sol/toit)
 const DUST_ON_LANDING = false;  // pas de poussière à l’atterrissage
 
+// --- Feet helper (monde) : renvoie la Y "visible" des pieds (avec footPad) ---
+function feetYWorld(){
+  const footPad = Math.round(MYO_H * FOOT_PAD_RATIO);
+  return GROUND_Y + player.y + footPad;
+}
   
   // Toits
   let onPlatform=false, dropThrough=0; let downPressedEdge=false;
@@ -302,7 +307,7 @@ function buildWorld(){
   npcs.length = 0;
   posters.length = 0;
 
-  const NUM_BLOCKS = 10;
+  const NUM_BLOCKS = 12; // 12 blocs => 12 bâtiments 2/3 (1 par bloc)
 
   // Gaps (entre b0-b1 et b1-b2) – on garantit la place pour 1 poster et 1 PNJ
   const GAP_POSTER_MIN = 200;          // >= poster 120 + marge sécurité
@@ -384,7 +389,9 @@ function buildWorld(){
         x: bx, y: by, dw, dh,
         roof,
         doorX: bx, doorW: dw,
-        canEnterPossible: (typeId===2 || typeId===3) // Kaito (98) non ouvrable
+        canEnterPossible: (typeId===2 || typeId===3), // Kaito (98) non ouvrable
+        canEnterAlways  : (typeId===2 || typeId===3)
+
       });
 
       placedThisBlock.push({x:bx, dw, typeId});
@@ -466,7 +473,8 @@ function buildWorld(){
     const s=targetH/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
     const x = worldEndX - 800; const y = GROUND_Y - dh;
     endWall={frames:images.buildingWall, animT:0, x, y, dw, dh};
-    worldEndX = endWall.x - 8;
+    worldEndX = endWall.x + endWall.dw + 8; // on peut "voir" et approcher le mur
+
   }
 
   /* ========== Draw helpers ========== */
@@ -485,20 +493,17 @@ function buildWorld(){
     const s=H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
     const footPad=Math.round(dh*FOOT_PAD_RATIO);
     const x=Math.floor(player.x - cameraX), y=GROUND_Y - dh + player.y + yOff + footPad;
-    if(dashTimer>0 && images.dashTrail.length){
+if(dashTimer>0 && images.dashTrail.length){
   const ti = images.dashTrail[Math.floor(player.animTime*9)%images.dashTrail.length];
+  const sx = (player.facing==='left')
+    ? (x + DASH_TRAIL_OFF - dw)   // offset miroir côté gauche SANS flip
+    : (x - DASH_TRAIL_OFF);       // offset côté droit
   ctx.save();
-  if(player.facing==='left'){
-    ctx.translate(x + dw/2 - DASH_TRAIL_OFF, y);
-    ctx.scale(-1,1);
-    ctx.translate(-dw/2, 0);
-  } else {
-    ctx.translate(x - DASH_TRAIL_OFF, y);
-  }
   ctx.globalAlpha = 0.85;
-  ctx.drawImage(ti, 0, 0, dw, dh);
+  ctx.drawImage(ti, Math.round(sx), Math.round(y), dw, dh);
   ctx.restore();
 }
+
 
     ctx.save();
     if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img,0,0,dw,dh); }
@@ -575,7 +580,10 @@ function buildWorld(){
     const vyBefore = player.vy;
 
     let vx=0;
-    const base=MOVE_SPEED*(player.onGround || dashTimer>0 ? 1 : AIR_SPEED_MULT);
+    const groundSpeed = MOVE_SPEED * 1.05;                    // +10% au sol
+const airSpeed    = MOVE_SPEED * (AIR_SPEED_MULT * 1.10); // +15% en l’air
+const base        = (player.onGround ? groundSpeed : airSpeed);
+
 
     if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*base*DASH_MULT; dashTimer-=dt; }
     else{
@@ -598,7 +606,7 @@ if(jumpBuf>0){
     player.vy = -JUMP_VELOCITY;
     player.onGround = false;
     jumpBuf = 0;
-    if(DUST_ON_TAKEOFF) spawnDust(player.x, GROUND_Y + player.y); // FIXE au sol, à l'endroit du saut
+    if(DUST_ON_TAKEOFF) spawnDust(player.x, feetYWorld()); // EXACT sous les pieds visibles
     sfx.jump?.play().catch(()=>{});
   } else if(airJumpsUsed < AIR_JUMPS){
     // Double saut en l’air -> PAS de poussière
@@ -664,7 +672,7 @@ if (GROUND_Y + player.y > GROUND_Y) {
 if(!wasOnGround && player.onGround){
   const impact = Math.min(4, Math.abs(vyBefore)/600);
   addShake(impact>0.6 ? impact : 0.6);
-  if(DUST_ON_LANDING) spawnDust(player.x, GROUND_Y + player.y);
+  if(DUST_ON_LANDING) spawnDust(player.x, feetYWorld());
 }
 
 
@@ -693,12 +701,16 @@ if(!wasOnGround && player.onGround){
         const feet=GROUND_Y+player.y, base=b.y+b.dh;
         const nearBase=Math.abs(feet-base)<280;
         if(atDoor && nearBase){
-          if(b.canEnterPossible){
-            const open = shouldEnterThis23(b);
-            triedDoor.add(b.id);
-            if(open){ b.wasOpen=true; enterInterior(b); } else { b.wasOpen=false; sfx.doorLocked?.play().catch(()=>{}); }
-            break;
-          } else { sfx.doorLocked?.play().catch(()=>{}); break; }
+if (b.canEnterPossible){
+  // Bâtiments 2/3 : toujours ré-ouvrables, re-entry infini
+  b.wasOpen = true;
+  triedDoor.add(b.id);
+  enterInterior(b);
+  break;
+} else {
+  sfx.doorLocked?.play().catch(()=>{});
+  break;
+}
         }
       }
       if(endWall){
