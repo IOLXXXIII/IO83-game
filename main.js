@@ -1021,3 +1021,8 @@ startBtn.addEventListener('click', onStart, {passive:false});
 startBtn.addEventListener('pointerdown', onStart, {passive:false});
 gate.addEventListener('click', onStart, {passive:false});
 gate.addEventListener('pointerdown', onStart, {passive:false});
+
+  console.log('[IO83] main.js chargé ✔');
+
+ // --- FIN DU FICHIER ---
+})();
