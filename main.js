@@ -293,49 +293,85 @@ function checkAllComplete(){
     return Math.random() < BASE_ENTER_CHANCE;
   }
 
-  /* ========== Chargement ========== */
-  let worldReady=false;
-  async function loadAll(){
-    const L=src=>loadImg(src);
-    images.back = await L(ASSETS.back);
-    images.mid  = await L(ASSETS.mid);
-    images.front= await L(ASSETS.front);
-    for(const s of ASSETS.myoIdle) images.myoIdle.push(await L(s));
-    for(const s of ASSETS.myoWalk) images.myoWalk.push(await L(s));
-    images.posterWith    = await L(ASSETS.posterWith);
-    images.posterWithout = await L(ASSETS.posterWithout);
-    for(const k of Object.keys(ASSETS.npcs)) for(const s of ASSETS.npcs[k]) images.npcs[k].push(await L(s));
-    try{
-      const r=await fetch(ASSETS.dialogsManifest); const mf=await r.json();
-for(const k of ['aeron','kaito','maonis','kahikoans']){
-  const list = mf[k] || [];
-  for(const name of list){
-    const p = `assets/ui/dialogs/${k}/${name}${CB}`;
-    const i = await loadImg(p);
-    if(i){
-      if(!images.dialogs[k]) images.dialogs[k] = [];
-      images.dialogs[k].push(i);
-    }
-  }
-}
+/* ========== Chargement ========== */
+let worldReady=false;
+function loadAll(){
+  const L = (src)=>loadImg(src);
+  const tasks = [];
 
-    }catch{}
-    for(const [a,b,id] of ASSETS.buildings) images.buildings.push([await L(a), (await L(b))||null, id]);
-    { const ka=await L(ASSETS.buildingKaito[0]); const kb=ka? await L(ASSETS.buildingKaito[1]):null; images.buildingKaito=ka?[ka,kb||ka]:null; }
-    { const wa=await L(ASSETS.buildingWall[0]); const wb=wa? await L(ASSETS.buildingWall[1]):null; images.buildingWall=wa?[wa,wb||wa]:null; }
-    for(const s of ASSETS.dashTrail){ const i=await L(s); if(i) images.dashTrail.push(i); }
-    for(const s of ASSETS.jumpDust){ const i=await L(s); if(i) images.jumpDust.push(i); }
-    for(const s of ASSETS.interiorClosedIdle){ const i=await L(s); if(i) images.interiorClosedIdle.push(i); }
-    for(const s of ASSETS.interiorOpens){ const i=await L(s); if(i) images.interiorOpens.push(i); }
-    images.postersComplete = await L(ASSETS.postersCompletePNG);
-    images.allComplete = await L(ASSETS.allCompletePNG);
+  // Fonds
+  tasks.push(L(ASSETS.back).then(i=>{ images.back=i; }));
+  tasks.push(L(ASSETS.mid ).then(i=>{ images.mid =i; }));
+  tasks.push(L(ASSETS.front).then(i=>{ images.front=i; }));
 
-    
+  // Myo
+  tasks.push(Promise.all(ASSETS.myoIdle.map(L)).then(arr=>{ images.myoIdle = arr.filter(Boolean); }));
+  tasks.push(Promise.all(ASSETS.myoWalk.map(L)).then(arr=>{ images.myoWalk = arr.filter(Boolean); }));
 
+  // Posters
+  tasks.push(L(ASSETS.posterWith   ).then(i=>{ images.posterWith    = i; }));
+  tasks.push(L(ASSETS.posterWithout).then(i=>{ images.posterWithout = i; }));
+
+  // NPCs
+  tasks.push(Promise.all(Object.keys(ASSETS.npcs).map(function(k){
+    return Promise.all(ASSETS.npcs[k].map(L)).then(function(arr){
+      images.npcs[k] = arr.filter(Boolean);
+    });
+  })));
+
+  // Dialogs (manifest + PNG)
+  tasks.push(
+    fetch(ASSETS.dialogsManifest).then(function(r){ return r.json(); }).then(function(mf){
+      const subtasks=[];
+      ['aeron','kaito','maonis','kahikoans'].forEach(function(k){
+        const list = (mf && mf[k]) ? mf[k] : [];
+        subtasks.push(Promise.all(list.map(function(name){
+          const p = 'assets/ui/dialogs/'+k+'/'+name+CB;
+          return L(p);
+        })).then(function(arr){
+          images.dialogs[k] = arr.filter(Boolean);
+        }));
+      });
+      return Promise.all(subtasks);
+    }).catch(function(){ /* dialogs facultatifs */ })
+  );
+
+  // Buildings (4 types)
+  tasks.push(Promise.all(ASSETS.buildings.map(function(pair){
+    return Promise.all([ L(pair[0]), L(pair[1]) ]).then(function(ab){
+      images.buildings.push([ ab[0], (ab[1]||ab[0]), pair[2] ]);
+    });
+  })));
+
+  // Bâtiment Kaito
+  tasks.push(Promise.all([ L(ASSETS.buildingKaito[0]), L(ASSETS.buildingKaito[1]) ]).then(function(kb){
+    var ka=kb[0], kb2=kb[1];
+    images.buildingKaito = ka ? [ka, (kb2||ka)] : null;
+  }));
+
+  // Mur de fin
+  tasks.push(Promise.all([ L(ASSETS.buildingWall[0]), L(ASSETS.buildingWall[1]) ]).then(function(wb){
+    var wa=wb[0], wb2=wb[1];
+    images.buildingWall = wa ? [wa, (wb2||wa)] : null;
+  }));
+
+  // FX & intérieurs
+  tasks.push(Promise.all(ASSETS.dashTrail.map(L)).then(arr=>{ images.dashTrail = arr.filter(Boolean); }));
+  tasks.push(Promise.all(ASSETS.jumpDust .map(L)).then(arr=>{ images.jumpDust  = arr.filter(Boolean); }));
+  tasks.push(Promise.all(ASSETS.interiorClosedIdle.map(L)).then(arr=>{ images.interiorClosedIdle = arr.filter(Boolean); }));
+  tasks.push(Promise.all(ASSETS.interiorOpens     .map(L)).then(arr=>{ images.interiorOpens      = arr.filter(Boolean); }));
+
+  // Overlays fin
+  tasks.push(L(ASSETS.postersCompletePNG).then(i=>{ images.postersComplete = i; }));
+  tasks.push(L(ASSETS.allCompletePNG    ).then(i=>{ images.allComplete     = i; }));
+
+  return Promise.all(tasks).then(function(){
     recalcGround();
     buildWorld();
-    worldReady=true;
-  }
+    worldReady = true;
+  });
+}
+
 
   /* ========== Intervalles réservés (anti-chevauchement) ========== */
   function intervalsFromBuildings(margin=420){
@@ -916,13 +952,19 @@ camYOffset += shY;
     requestAnimationFrame(loop);
   }
 
-  /* ========== Boot ========== */
-  async function boot(){
-    startBtn.disabled=true; startBtn.textContent='Loading…';
-    await loadAll();
-    gate.style.display='none';
+ /* ========== Boot ========== */
+function boot(){
+  startBtn.disabled = true;
+  startBtn.textContent = 'Loading…';
+  loadAll().then(function(){
+    gate.style.display = 'none';
     requestAnimationFrame(loop);
-  }
-  function tryStart(){ startAudio(); boot(); }
-  startBtn.addEventListener('click', tryStart, {once:true});
-})();
+  });
+}
+function tryStart(){ startAudio(); boot(); }
+
+// Écouteur "once" compatible vieux navigateurs
+startBtn.addEventListener('click', function onStart(){
+  startBtn.removeEventListener('click', onStart);
+  tryStart();
+}, false);
