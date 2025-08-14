@@ -25,6 +25,7 @@
   const hud=document.getElementById('hud');
 
   let postersCount=0, eggs=0;
+  const POSTERS_TOTAL = 10;
   const scoreEl=document.getElementById('scoreNum');
   const eggBox=(()=>{ let e=document.getElementById('eggNum'); if(!e){ const box=document.createElement('div'); box.id='eggs'; box.innerHTML='??? <span id="eggNum">0/10</span>'; hud.appendChild(box); e=box.querySelector('#eggNum'); } return e; })();
 const setWanted=()=>{ if(scoreEl) scoreEl.textContent=`${postersCount}/10`; checkAllComplete(); };
@@ -199,9 +200,9 @@ addEventListener('keyup',e=>{
   
   const player={x:0,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
 
-  /* ========== Posters ========== */
-  const POSTERS_TOTAL=10, POSTER_SIZE=Math.round(100*1.2);
-  const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
+/* ========== Posters ========== */
+const POSTER_SIZE=Math.round(100*1.2);
+const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[];
   let postersOverlay=null;
   function ensureOverlay(){
