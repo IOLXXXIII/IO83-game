@@ -6,6 +6,16 @@
 
 (function(){
   'use strict';
+  // ——— Debug visuel : affiche une bannière rouge si une erreur JS survient ———
+window.addEventListener('error', function(ev){
+  try{
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#b00020;color:#fff;padding:8px 12px;font:14px/1.4 system-ui';
+    bar.textContent = 'Erreur JS: ' + (ev.error && ev.error.message ? ev.error.message : ev.message);
+    document.body.appendChild(bar);
+  }catch(_){}
+});
+
 
   /* ========== Utils ========== */
   const rnd=(a,b)=>Math.random()*(b-a)+a;
@@ -13,12 +23,31 @@
   const aabb=(ax,ay,aw,ah,bx,by,bw,bh)=>ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
 
   /* ========== Canvas ========== */
-  const canvas=document.getElementById('game');
-  let ctx = canvas.getContext('2d', {alpha:false});
-if(!ctx) ctx = canvas.getContext('2d'); // fallback anciens navigateurs
-  const DPR=Math.max(1,Math.floor(window.devicePixelRatio||1));
-  function resize(){ const w=1280,h=720; canvas.width=w*DPR; canvas.height=h*DPR; ctx.imageSmoothingEnabled=false; ctx.setTransform(DPR,0,0,DPR,0,0); }
-  resize(); addEventListener('resize',resize);
+/* ========== Canvas ========== */
+const canvas=document.getElementById('game');
+if(!canvas){
+  console.error('[IO83] Canvas #game introuvable');
+  return;
+}
+let ctx = null;
+try{
+  ctx = canvas.getContext('2d', {alpha:false});
+}catch(e){}
+if(!ctx) ctx = canvas.getContext('2d');
+if(!ctx){
+  console.error('[IO83] Contexte 2D introuvable');
+  return;
+}
+const DPR=Math.max(1,Math.floor(window.devicePixelRatio||1));
+function resize(){
+  const w=1280,h=720;
+  canvas.width=w*DPR; canvas.height=h*DPR;
+  ctx.imageSmoothingEnabled=false;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+resize();
+addEventListener('resize',resize);
+
 
   /* ========== Gate / HUD ========== */
   const gate=document.getElementById('gate');
@@ -63,7 +92,12 @@ const setEggs=()=>{ eggBox.textContent=`${eggs}/10`; checkAllComplete(); };
   /* ========== Parallax / Ground ========== */
   const VIEW_DEN={back:6, mid:6, front:6};
   let cameraX=0, camYOffset=0;
-  let GROUND_SRC_OFFSET=parseInt(localStorage.getItem('GROUND_SRC_OFFSET')||'18',10);
+  let GROUND_SRC_OFFSET = 18;
+try{
+  const v = localStorage.getItem('GROUND_SRC_OFFSET');
+  if(v!=null) GROUND_SRC_OFFSET = parseInt(v,10) || 18;
+}catch(e){ /* pas de localStorage → on garde 18 */ }
+
   let GROUND_Y=560;
   function recalcGround(){
     const W=canvas.width/DPR, H=canvas.height/DPR;
@@ -300,77 +334,85 @@ function loadAll(){
   const tasks = [];
 
   // Fonds
-  tasks.push(L(ASSETS.back).then(i=>{ images.back=i; }));
-  tasks.push(L(ASSETS.mid ).then(i=>{ images.mid =i; }));
-  tasks.push(L(ASSETS.front).then(i=>{ images.front=i; }));
+  tasks.push(L(ASSETS.back ).then(i=>{ images.back  = i; }).catch(()=>{}));
+  tasks.push(L(ASSETS.mid  ).then(i=>{ images.mid   = i; }).catch(()=>{}));
+  tasks.push(L(ASSETS.front).then(i=>{ images.front = i; }).catch(()=>{}));
 
   // Myo
-  tasks.push(Promise.all(ASSETS.myoIdle.map(L)).then(arr=>{ images.myoIdle = arr.filter(Boolean); }));
-  tasks.push(Promise.all(ASSETS.myoWalk.map(L)).then(arr=>{ images.myoWalk = arr.filter(Boolean); }));
+  tasks.push(Promise.all(ASSETS.myoIdle.map(L)).then(arr=>{ images.myoIdle = arr.filter(Boolean); }).catch(()=>{}));
+  tasks.push(Promise.all(ASSETS.myoWalk.map(L)).then(arr=>{ images.myoWalk = arr.filter(Boolean); }).catch(()=>{}));
 
   // Posters
-  tasks.push(L(ASSETS.posterWith   ).then(i=>{ images.posterWith    = i; }));
-  tasks.push(L(ASSETS.posterWithout).then(i=>{ images.posterWithout = i; }));
+  tasks.push(L(ASSETS.posterWith   ).then(i=>{ images.posterWith    = i; }).catch(()=>{}));
+  tasks.push(L(ASSETS.posterWithout).then(i=>{ images.posterWithout = i; }).catch(()=>{}));
 
   // NPCs
   tasks.push(Promise.all(Object.keys(ASSETS.npcs).map(function(k){
     return Promise.all(ASSETS.npcs[k].map(L)).then(function(arr){
       images.npcs[k] = arr.filter(Boolean);
-    });
-  })));
+    }).catch(()=>{ images.npcs[k]=[]; });
+  })).catch(()=>{}));
 
-  // Dialogs (manifest + PNG)
+  // Dialogs (facultatif)
   tasks.push(
-    fetch(ASSETS.dialogsManifest).then(function(r){ return r.json(); }).then(function(mf){
-      const subtasks=[];
-      ['aeron','kaito','maonis','kahikoans'].forEach(function(k){
-        const list = (mf && mf[k]) ? mf[k] : [];
-        subtasks.push(Promise.all(list.map(function(name){
-          const p = 'assets/ui/dialogs/'+k+'/'+name+CB;
-          return L(p);
-        })).then(function(arr){
-          images.dialogs[k] = arr.filter(Boolean);
-        }));
-      });
-      return Promise.all(subtasks);
-    }).catch(function(){ /* dialogs facultatifs */ })
+    fetch(ASSETS.dialogsManifest)
+      .then(r=>r.json())
+      .then(function(mf){
+        const subtasks=[];
+        ['aeron','kaito','maonis','kahikoans'].forEach(function(k){
+          const list = (mf && mf[k]) ? mf[k] : [];
+          subtasks.push(
+            Promise.all(list.map(function(name){
+              const p = 'assets/ui/dialogs/'+k+'/'+name+CB;
+              return L(p);
+            }))
+            .then(function(arr){ images.dialogs[k] = arr.filter(Boolean); })
+            .catch(()=>{ images.dialogs[k]=[]; })
+          );
+        });
+        return Promise.all(subtasks);
+      })
+      .catch(()=>{})
   );
 
-  // Buildings (4 types)
+  // Bâtiments (4 types)
   tasks.push(Promise.all(ASSETS.buildings.map(function(pair){
     return Promise.all([ L(pair[0]), L(pair[1]) ]).then(function(ab){
       images.buildings.push([ ab[0], (ab[1]||ab[0]), pair[2] ]);
-    });
-  })));
+    }).catch(()=>{});
+  })).catch(()=>{}));
 
-  // Bâtiment Kaito
-  tasks.push(Promise.all([ L(ASSETS.buildingKaito[0]), L(ASSETS.buildingKaito[1]) ]).then(function(kb){
-    var ka=kb[0], kb2=kb[1];
-    images.buildingKaito = ka ? [ka, (kb2||ka)] : null;
-  }));
+  // Kaito + mur de fin
+  tasks.push(Promise.all([ L(ASSETS.buildingKaito[0]), L(ASSETS.buildingKaito[1]) ])
+    .then(function(kb){ var ka=kb[0], kb2=kb[1]; images.buildingKaito = ka ? [ka, (kb2||ka)] : null; })
+    .catch(()=>{ images.buildingKaito=null; })
+  );
+  tasks.push(Promise.all([ L(ASSETS.buildingWall[0]), L(ASSETS.buildingWall[1]) ])
+    .then(function(wb){ var wa=wb[0], wb2=wb[1]; images.buildingWall = wa ? [wa, (wb2||wa)] : null; })
+    .catch(()=>{ images.buildingWall=null; })
+  );
 
-  // Mur de fin
-  tasks.push(Promise.all([ L(ASSETS.buildingWall[0]), L(ASSETS.buildingWall[1]) ]).then(function(wb){
-    var wa=wb[0], wb2=wb[1];
-    images.buildingWall = wa ? [wa, (wb2||wa)] : null;
-  }));
+  // FX + intérieurs + overlays
+  tasks.push(Promise.all(ASSETS.dashTrail.map(L)).then(arr=>{ images.dashTrail = arr.filter(Boolean); }).catch(()=>{}));
+  tasks.push(Promise.all(ASSETS.jumpDust .map(L)).then(arr=>{ images.jumpDust  = arr.filter(Boolean); }).catch(()=>{}));
+  tasks.push(Promise.all(ASSETS.interiorClosedIdle.map(L)).then(arr=>{ images.interiorClosedIdle = arr.filter(Boolean); }).catch(()=>{}));
+  tasks.push(Promise.all(ASSETS.interiorOpens     .map(L)).then(arr=>{ images.interiorOpens      = arr.filter(Boolean); }).catch(()=>{}));
+  tasks.push(L(ASSETS.postersCompletePNG).then(i=>{ images.postersComplete = i; }).catch(()=>{}));
+  tasks.push(L(ASSETS.allCompletePNG    ).then(i=>{ images.allComplete     = i; }).catch(()=>{}));
 
-  // FX & intérieurs
-  tasks.push(Promise.all(ASSETS.dashTrail.map(L)).then(arr=>{ images.dashTrail = arr.filter(Boolean); }));
-  tasks.push(Promise.all(ASSETS.jumpDust .map(L)).then(arr=>{ images.jumpDust  = arr.filter(Boolean); }));
-  tasks.push(Promise.all(ASSETS.interiorClosedIdle.map(L)).then(arr=>{ images.interiorClosedIdle = arr.filter(Boolean); }));
-  tasks.push(Promise.all(ASSETS.interiorOpens     .map(L)).then(arr=>{ images.interiorOpens      = arr.filter(Boolean); }));
-
-  // Overlays fin
-  tasks.push(L(ASSETS.postersCompletePNG).then(i=>{ images.postersComplete = i; }));
-  tasks.push(L(ASSETS.allCompletePNG    ).then(i=>{ images.allComplete     = i; }));
-
-  return Promise.all(tasks).then(function(){
-    recalcGround();
-    buildWorld();
-    worldReady = true;
+  // Pare-chocs global : ne REJETTE JAMAIS
+  return Promise.allSettled(tasks).then(function(){
+    try{
+      recalcGround();
+      buildWorld();
+      worldReady = true;
+    }catch(err){
+      console.error('[IO83] build/init error:', err);
+      worldReady = true; // on lance quand même la boucle pour ne pas bloquer le START
+    }
   });
 }
+
 
 
   /* ========== Intervalles réservés (anti-chevauchement) ========== */
@@ -569,8 +611,7 @@ function buildWorld(){
     const x = worldEndX - 800; const y = GROUND_Y - dh;
     endWall={frames:images.buildingWall, animT:0, x, y, dw, dh};
     worldEndX = endWall.x + endWall.dw + 8; // on peut "voir" et approcher le mur
-worldEndX = endWall.x + endWall.dw + 8; // caméra peut aller au-delà pour voir le mur
-worldPlayerMaxX = Math.floor(endWall.x + endWall.dw*0.5) - PLAYER_HALF_W; // centre du joueur bloqué à la moitié du mur
+    worldPlayerMaxX = Math.floor(endWall.x + endWall.dw*0.5) - PLAYER_HALF_W; // centre du joueur bloqué à la moitié du mur
 
   }
 
@@ -952,7 +993,7 @@ camYOffset += shY;
     requestAnimationFrame(loop);
   }
 
- /* ========== Boot ========== */
+/* ========== Boot ========== */
 function boot(){
   startBtn.disabled = true;
   startBtn.textContent = 'Loading…';
@@ -963,8 +1004,16 @@ function boot(){
 }
 function tryStart(){ startAudio(); boot(); }
 
-// Écouteur "once" compatible vieux navigateurs
-startBtn.addEventListener('click', function onStart(){
-  startBtn.removeEventListener('click', onStart);
+// Attache robuste (click + pointerdown) et “once” manuel
+function onStart(e){
+  e.preventDefault();
+  cleanup();
   tryStart();
-}, false);
+}
+function cleanup(){
+  startBtn.removeEventListener('click', onStart);
+  startBtn.removeEventListener('pointerdown', onStart);
+}
+startBtn.addEventListener('click', onStart, {passive:false});
+startBtn.addEventListener('pointerdown', onStart, {passive:false});
+
