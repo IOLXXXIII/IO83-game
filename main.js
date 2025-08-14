@@ -55,19 +55,41 @@ addEventListener('resize',resize);
   const hud=document.getElementById('hud');
 
   let postersCount=0, eggs=0;
+  let postersCount=0, eggs=0;
   const POSTERS_TOTAL = 10;
-const scoreEl=document.getElementById('scoreNum');
-const eggBox=(()=>{ /* ... */ })();
 
-// >>> AJOUTER CES 3 LIGNES ICI (avant tout appel à checkAllComplete)
-let allCompleteOverlay = null;
-let allCompleteTimerId = null;
-let allCompleteShown   = false;
-// <<<
+  const scoreEl = document.getElementById('scoreNum');
 
-const setWanted=()=>{ if(scoreEl) scoreEl.textContent=`${postersCount}/10`; checkAllComplete(); };
-const setEggs=()=>{ eggBox.textContent=`${eggs}/10`; checkAllComplete(); };
-setWanted(); setEggs();
+  // Crée la boîte des œufs si elle n’existe pas déjà et renvoie le <span id="eggNum">
+  const eggBox = (() => {
+    let e = document.getElementById('eggNum');
+    if (!e) {
+      const box = document.createElement('div');
+      box.id = 'eggs';
+      box.innerHTML = '??? <span id="eggNum">0/10</span>';
+      hud.appendChild(box);
+      e = box.querySelector('#eggNum');
+    }
+    return e;
+  })();
+
+  // Variables utilisées par checkAllComplete (doivent exister AVANT tout appel)
+  let allCompleteOverlay = null;
+  let allCompleteTimerId = null;
+  let allCompleteShown   = false;
+
+  const setWanted = () => {
+    if (scoreEl) scoreEl.textContent = `${postersCount}/10`;
+    checkAllComplete();
+  };
+  const setEggs = () => {
+    if (eggBox) eggBox.textContent = `${eggs}/10`;
+    checkAllComplete();
+  };
+
+  setWanted();
+  setEggs();
+
 
 
   /* ========== Audio ========== */
