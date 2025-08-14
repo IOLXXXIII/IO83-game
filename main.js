@@ -166,7 +166,7 @@ try{
     interiorClosedIdle:['assets/interiors/interior_closed_idle_1.png'+CB,'assets/interiors/interior_closed_idle_2.png'+CB],
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
   postersCompletePNG:'assets/ui/posters_complete.png'+CB,
-  allCompletePNG:'assets/ui/all_complete.png'+CB
+  allCompletePNG:'assets/collectibles/all_complete.png'+CB
   };
 const images={
   back:null, mid:null, front:null, myoIdle:[], myoWalk:[],
