@@ -1013,7 +1013,11 @@ function onStart(e){
 function cleanup(){
   startBtn.removeEventListener('click', onStart);
   startBtn.removeEventListener('pointerdown', onStart);
+  gate.removeEventListener('click', onStart);
+  gate.removeEventListener('pointerdown', onStart);
 }
+// Écoute le bouton ET toute la zone gate (au cas où quelque chose recouvrirait encore)
 startBtn.addEventListener('click', onStart, {passive:false});
 startBtn.addEventListener('pointerdown', onStart, {passive:false});
-
+gate.addEventListener('click', onStart, {passive:false});
+gate.addEventListener('pointerdown', onStart, {passive:false});
