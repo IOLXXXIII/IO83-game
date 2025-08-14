@@ -687,8 +687,6 @@ function drawMyo(runVel,yOff,H=MYO_H){
   }
   ctx.restore();
 }
-
-
   function drawBuildings(yOff){
     for(const b of buildings){
       const sx=Math.floor(b.x - cameraX); if(sx<-2200 || sx>canvas.width/DPR+2200) continue;
