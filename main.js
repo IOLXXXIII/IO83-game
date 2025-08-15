@@ -119,6 +119,27 @@ addEventListener('resize',resize);
   const footPlay=()=>{ if(!sfx.foot) return; if(sfx.foot.paused) sfx.foot.play().catch(()=>{}); sfx.foot.playbackRate=0.96+Math.random()*0.08; };
   const footStop=()=>{ if(sfx.foot && !sfx.foot.paused) sfx.foot.pause(); };
 
+// --- Helpers audio ---
+function makePool(el, n=3){
+  if(!el) return [];
+  const arr=[];
+  for(let i=0;i<n;i++){ const c=el.cloneNode(true); c.volume=el.volume; arr.push(c); }
+  return arr;
+}
+const jumpPool = makePool(sfx.jump, 3);
+let jumpPoolIdx = 0;
+function playJump(){
+  if(!sfx.jump) return;
+  const a = jumpPool.length ? jumpPool[(jumpPoolIdx++)%jumpPool.length] : sfx.jump;
+  try{ a.currentTime=0; a.play().catch(()=>{});}catch(_){}
+}
+function playDing(){
+  if(!sfx.ding) return;
+  try{ sfx.ding.currentTime=0; sfx.ding.play().catch(()=>{});}catch(_){}
+}
+
+
+  
   /* ========== Parallax / Ground ========== */
   const VIEW_DEN={back:6, mid:6, front:6};
   let cameraX=0, camYOffset=0;
@@ -318,11 +339,12 @@ function checkAllComplete(){
   // Jamais en intérieur
   if(mode!=='world') return;
 
-  // Affiche ~2 s après la dernière mise à jour
+  // Affiche ~5 s après la dernière mise à jour
   if(allCompleteTimerId) clearTimeout(allCompleteTimerId);
   allCompleteTimerId = setTimeout(()=>{
     ensureAllCompleteOverlay().style.display='grid';
-  }, 2000);
+    playDing();
+  }, 5000);
 }
 
 
@@ -617,7 +639,7 @@ function buildWorld(){
     let npcType = 'kahikoans';
     // place Aeron dans le premier tiers (une seule fois)
     if (!buildWorld._aeronPlaced && b < firstThird) { npcType='aeron'; buildWorld._aeronPlaced = true; }
-    else if (Math.random()<0.40)                     { npcType='maonis'; }
+    else if (Math.random() < NPC_MAONIS_RATE)        { npcType='maonis'; }
     if (b === KAITO_BLOCK)                           { npcType='kaito'; } // bloc Kaito → PNJ = Kaito
 
     // Affectation gap → éléments
@@ -816,22 +838,15 @@ dashTrailT=Math.max(0, dashTrailT - dt);
 
 // Jump (variable height + FX)
 if(jumpBuf>0){
-  if(player.onGround || coyote>0){
-    // Décollage depuis le sol / un toit
-    player.vy = -JUMP_VELOCITY;
-    player.onGround = false;
-    jumpBuf = 0;
-    if(DUST_ON_TAKEOFF) spawnDust(player.x, GROUND_Y + player.y); // pied réel (sans footPad)
-    if(sfx.jump) sfx.jump.play().catch(()=>{});
-  } else if(airJumpsUsed < AIR_JUMPS){
-    // Double saut en l’air -> PAS de poussière
-    airJumpsUsed++;
-    player.vy = -JUMP_VELOCITY;
-    jumpBuf = 0;
-    if(sfx.jump) sfx.jump.play().catch(()=>{});
-
+  if(player.onGround||coyote>0){
+    player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0;
+    playJump(); // son uniquement pour le saut du sol
+  } else if(airJumpsUsed<AIR_JUMPS){
+    airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0;
+    // pas de son ici
   }
 }
+
 
 
 // Gravity (variable jump height)
@@ -907,7 +922,12 @@ if(!wasOnGround && player.onGround){
       const feetY=GROUND_Y-110+player.y;
       const over=aabb(player.x-26,feetY,52,110, p.x,p.y,p.w,p.h);
       if(!p.taken && !p.taking && dx<=COLLECT_RADIUS && over && wantsDown){ p.taking=true; p.t=0; }
-      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount++; setWanted(); if(sfx.wanted) sfx.wanted.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){ if(sfx.postersComplete) sfx.postersComplete.play().catch(()=>{}); ensureOverlay().style.display='grid'; } } }
+      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount++; setWanted(); if(sfx.wanted) sfx.wanted.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){
+  if(sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
+  ensureOverlay().style.display='grid';
+  playDing(); // ding au moment d’afficher l’overlay
+}
+ } }
     }
 
     // Portes
@@ -995,7 +1015,11 @@ function exitInterior(){
   currentB = null;
 
   if(shouldShow){
-    setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; }, 2000);
+    setTimeout(()=>{
+  ensureAllCompleteOverlay().style.display='grid';
+  playDing();
+}, 5000);
+
   }
 }
 
