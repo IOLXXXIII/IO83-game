@@ -982,84 +982,83 @@ function exitInterior(){
 }
 
 
-// Re-affiche "ALL COMPLETE" si on est déjà à 10/10 et qu'on relance un terminal
-if (eggIndex >= 10) {
-  ensureAllCompleteOverlay().style.display = 'grid';
+function updateInterior(dt){
+  const W=canvas.width/DPR, H=canvas.height/DPR;
+  // headroom : sol plus bas, plafond reculé
+  const floorY=H-48, ceilY=-300;
+
+  let vx=0; const base=MOVE_SPEED*AIR_SPEED_MULT;
+  if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*base*DASH_MULT; dashTimer-=dt; }
+  else{
+    if(keys.has('ArrowRight')||keys.has('d')){ vx+=base; player.facing='right'; }
+    if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=base; player.facing='left'; }
+  }
+  player.x=Math.max(0,Math.min(W-60,player.x+vx*dt));
+
+  if(player.onGround){ coyote=COYOTE_TIME; airJumpsUsed=0; airDashUsed=0; }
+  else coyote=Math.max(0,coyote-dt);
+  jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
+
+  if(jumpBuf>0){
+    if(player.onGround||coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
+    else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
+  }
+  if(dashTimer<=0){
+    if(player.vy<0){
+      let g = GRAVITY_UP;
+      if(!jumpHeld) g *= JUMP_CUT_MULT;
+      player.vy += g*dt;
+    } else {
+      player.vy += GRAVITY_DOWN*dt;
+    }
+  } else player.vy=0;
+
+  player.y += player.vy*dt;
+  if(floorY+player.y>floorY){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
+  const head=floorY - MYO_H_INTERIOR + player.y; if(head<ceilY){ player.y+=(ceilY-head); player.vy=0; }
+
+  if(player.x<=0 && !hacking){ exitInterior(); return; }
+
+  const wantsDown=keys.has('ArrowDown')||keys.has('s');
+
+  // Terminal LARGE : moitié droite & moitié basse
+  const term={ x:Math.floor(W*0.50), y:Math.floor(H*0.50), w:Math.floor(W*0.50), h:Math.floor(H*0.50) };
+  const myoH=MYO_H_INTERIOR, myoRect={ x:player.x-24, y:(floorY - myoH + player.y + INTERIOR_FOOT_EXTRA), w:48, h:myoH };
+  const inTerm=aabb(myoRect.x,myoRect.y,myoRect.w,myoRect.h, term.x,term.y,term.w,term.h);
+
+  if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; if(sfx.type) sfx.type.play().catch(()=>{}); }
+  if(hacking){
+    hackT+=dt;
+    if(hackT>=1.5){
+      hacking=false; hackT=0; if(sfx.ding) sfx.ding.play().catch(()=>{});
+      if(currentB && !hackedIds.has(currentB.id)){
+        hackedIds.add(currentB.id);
+        eggIndex=Math.min(10,eggIndex+1); eggs=eggIndex; setEggs();
+      }
+      interiorOpenIdx=Math.max(1,eggIndex); // 1→10
+
+      // Ne pas afficher ici : on flag pour l’afficher 2s après la sortie
+      if(eggIndex>=10) pendingAllComplete = true;
+    }
+  }
+
+  // Draw
+  player.state=Math.abs(vx)>1e-2?'walk':'idle'; player.animTime+=dt;
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  if(interiorOpenIdx===0){
+    const fr=images.interiorClosedIdle; const img=fr[Math.floor(player.animTime*2)%fr.length]||fr[0]; if(img) ctx.drawImage(img,0,0,W,H);
+  }else{
+    const img=images.interiorOpens[Math.min(9,interiorOpenIdx-1)]; if(img) ctx.drawImage(img,0,0,W,H);
+  }
+  const fr2=(Math.abs(vx)>1e-2?images.myoWalk:images.myoIdle);
+  const i2=fr2[Math.floor(player.animTime*(Math.abs(vx)>1e-2?8:4))%fr2.length]||fr2[0];
+  if(i2){
+    const s=MYO_H_INTERIOR/i2.height, dw=Math.round(i2.width*s), dh=Math.round(i2.height*s);
+    const x=Math.floor(player.x - dw/2), y=floorY - dh + player.y + INTERIOR_FOOT_EXTRA;
+    ctx.save(); if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(i2,0,0,dw,dh); } else ctx.drawImage(i2,x,y,dw,dh); ctx.restore();
+  }
 }
 
-    const W=canvas.width/DPR, H=canvas.height/DPR;
-    // headroom : sol plus bas, plafond reculé
-    const floorY=H-48, ceilY=-300;
-
-    let vx=0; const base=MOVE_SPEED*AIR_SPEED_MULT;
-    if(dashTimer>0){ vx=(player.facing==='right'?1:-1)*base*DASH_MULT; dashTimer-=dt; }
-    else{
-      if(keys.has('ArrowRight')||keys.has('d')){ vx+=base; player.facing='right'; }
-      if(keys.has('ArrowLeft') ||keys.has('a')){ vx-=base; player.facing='left'; }
-    }
-    player.x=Math.max(0,Math.min(W-60,player.x+vx*dt));
-
-    if(player.onGround){ coyote=COYOTE_TIME; airJumpsUsed=0; airDashUsed=0; }
-    else coyote=Math.max(0,coyote-dt);
-    jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
-
-    if(jumpBuf>0){
-      if(player.onGround||coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
-      else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
-    }
-    if(dashTimer<=0){
-  if(player.vy<0){
-    let g = GRAVITY_UP;
-    if(!jumpHeld) g *= JUMP_CUT_MULT;
-    player.vy += g*dt;
-  } else {
-    player.vy += GRAVITY_DOWN*dt;
-  }
-} else player.vy=0;
-
-    player.y += player.vy*dt;
-    if(floorY+player.y>floorY){ player.y=0; player.vy=0; player.onGround=true; } else player.onGround=false;
-    const head=floorY - MYO_H_INTERIOR + player.y; if(head<ceilY){ player.y+=(ceilY-head); player.vy=0; }
-
-    if(player.x<=0 && !hacking){ exitInterior(); return; }
-
-    const wantsDown=keys.has('ArrowDown')||keys.has('s');
-
-    // Terminal LARGE : moitié droite & moitié basse
-    const term={ x:Math.floor(W*0.50), y:Math.floor(H*0.50), w:Math.floor(W*0.50), h:Math.floor(H*0.50) };
-    const myoH=MYO_H_INTERIOR, myoRect={ x:player.x-24, y:(floorY - myoH + player.y + INTERIOR_FOOT_EXTRA), w:48, h:myoH };
-    const inTerm=aabb(myoRect.x,myoRect.y,myoRect.w,myoRect.h, term.x,term.y,term.w,term.h);
-
-    if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; if(sfx.type) sfx.type.play().catch(()=>{}); }
-    if(hacking){
-      hackT+=dt;
-      if(hackT>=1.5){
-        hacking=false; hackT=0; if(sfx.ding) sfx.ding.play().catch(()=>{});
-        if(currentB && !hackedIds.has(currentB.id)){
-          hackedIds.add(currentB.id);
-          eggIndex=Math.min(10,eggIndex+1); eggs=eggIndex; setEggs();
-        }
-        interiorOpenIdx=Math.max(1,eggIndex); // 1→10
-        if (eggIndex >= 10) pendingAllComplete = true;
-      }
-    }
-
-    // Draw
-    player.state=Math.abs(vx)>1e-2?'walk':'idle'; player.animTime+=dt;
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
-    if(interiorOpenIdx===0){
-      const fr=images.interiorClosedIdle; const img=fr[Math.floor(player.animTime*2)%fr.length]||fr[0]; if(img) ctx.drawImage(img,0,0,W,H);
-    }else{
-      const img=images.interiorOpens[Math.min(9,interiorOpenIdx-1)]; if(img) ctx.drawImage(img,0,0,W,H);
-    }
-    const fr2=(Math.abs(vx)>1e-2?images.myoWalk:images.myoIdle);
-    const i2=fr2[Math.floor(player.animTime*(Math.abs(vx)>1e-2?8:4))%fr2.length]||fr2[0];
-    if(i2){
-      const s=MYO_H_INTERIOR/i2.height, dw=Math.round(i2.width*s), dh=Math.round(i2.height*s);
-      const x=Math.floor(player.x - dw/2), y=floorY - dh + player.y + INTERIOR_FOOT_EXTRA;
-      ctx.save(); if(player.facing==='left'){ ctx.translate(x+dw/2,y); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(i2,0,0,dw,dh); } else ctx.drawImage(i2,x,y,dw,dh); ctx.restore();
-    }
-  }
 
   function loop(ts){ const dt=Math.min((ts-(loop.last||ts))/1000,1/30); loop.last=ts;
     if(!worldReady){ ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR); requestAnimationFrame(loop); return; }
