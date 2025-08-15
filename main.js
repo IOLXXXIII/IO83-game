@@ -210,10 +210,9 @@ try{
     interiorClosedIdle:['assets/interiors/interior_closed_idle_1.png'+CB,'assets/interiors/interior_closed_idle_2.png'+CB],
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
     postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
-    allCompletePNG:'assets/collectibles/all_complete.png'+CB
-    postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
     allCompletePNG:'assets/collectibles/all_complete.png'+CB,
     absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB
+
 
   };
 const images={
@@ -222,7 +221,10 @@ const images={
   npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
   dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
   buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
-  interiorClosedIdle:[], interiorOpens:[], postersComplete:null, allComplete:null, jumpDust:[]
+  interiorClosedIdle:[], interiorOpens:[],
+  postersComplete:null, allComplete:null, absoluteComplete:null,
+  jumpDust:[]
+
   postersComplete:null, allComplete:null, absoluteComplete:null, jumpDust:[]
 
 };
@@ -1090,7 +1092,6 @@ function exitInterior(){
   } else if (showAll) {
     setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; playDing(); }, 5000);
   }
-}
 }
 
 function updateInterior(dt){
