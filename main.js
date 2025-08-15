@@ -55,7 +55,9 @@ addEventListener('resize',resize);
   const hud = document.getElementById('hud');
 
   let postersCount = 0, eggs = 0;          // ← UNE SEULE FOIS
-  const POSTERS_TOTAL = 10;
+  const POSTERS_TOTAL = 11;
+  const MAX_COUNT_CAP = 11; // cap d'affichage/compte à 11
+
 
   const scoreEl = document.getElementById('scoreNum');
 
@@ -72,15 +74,14 @@ addEventListener('resize',resize);
     return e;
   })();
 
-  // Aligne la couleur des œufs sur celle du compteur Wanted
+// Couleur : seul le compteur (0/10) en jaune, pas "???"
 try{
   const wantedColor = scoreEl ? getComputedStyle(scoreEl).color : null;
-  if(wantedColor){
-    const eggsDiv = document.getElementById('eggs'); // contient "??? "
-    if(eggsDiv) eggsDiv.style.color = wantedColor;   // "??? " en jaune
-    if(eggBox)  eggBox.style.color  = wantedColor;   // "0/10" en jaune
-  }
+  if (wantedColor && eggBox) eggBox.style.color = wantedColor; // chiffres en jaune
+  const eggsDiv = document.getElementById('eggs');
+  if (eggsDiv) eggsDiv.style.removeProperty('color'); // laisse "???" en couleur par défaut
 }catch(_){}
+
 
 
   // Variables utilisées par checkAllComplete (déclarées AVANT toute utilisation)
@@ -88,20 +89,29 @@ try{
   let allCompleteTimerId = null;
   let allCompleteShown   = false;
   let pendingAllComplete = false;
+  let absoluteOverlay = null;
+  let absoluteTimerId = null;
+  let absoluteShown   = false;
+  let pendingAbsoluteComplete = false;
+
 
 
   const setWanted = () => {
     if (scoreEl) scoreEl.textContent = `${postersCount}/10`;
     checkAllComplete();
+    checkAbsoluteComplete(); // ← ajout
   };
   const setEggs = () => {
     if (eggBox) eggBox.textContent = `${eggs}/10`;
     checkAllComplete();
+    checkAbsoluteComplete(); // ← ajout
   };
 
   setWanted();
   setEggs();
 
+
+  
 
   /* ========== Audio ========== */
   const bgm=document.getElementById('bgm');
@@ -199,8 +209,12 @@ try{
     jumpDust : Array.from({length:16},(_,i)=>`assets/fx/jump_dust_${i+1}.png${CB}`),
     interiorClosedIdle:['assets/interiors/interior_closed_idle_1.png'+CB,'assets/interiors/interior_closed_idle_2.png'+CB],
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
-  postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
-  allCompletePNG:'assets/collectibles/all_complete.png'+CB
+    postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
+    allCompletePNG:'assets/collectibles/all_complete.png'+CB
+    postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
+    allCompletePNG:'assets/collectibles/all_complete.png'+CB,
+    absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB
+
   };
 const images={
   back:null, mid:null, front:null, myoIdle:[], myoWalk:[],
@@ -209,6 +223,8 @@ const images={
   dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
   buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
   interiorClosedIdle:[], interiorOpens:[], postersComplete:null, allComplete:null, jumpDust:[]
+  postersComplete:null, allComplete:null, absoluteComplete:null, jumpDust:[]
+
 };
 
   const loadImg=src=>new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; });
@@ -360,6 +376,42 @@ function checkAllComplete(){
   }, 5000);
 }
 
+function checkAbsoluteComplete(){
+  // Condition : 11/11 minimum
+  if(!(eggs>=11 && postersCount>=11)) return;
+  // Jamais en intérieur
+  if(mode!=='world') return;
+  // Affiche ~5 s après la dernière mise à jour
+  if(absoluteTimerId) clearTimeout(absoluteTimerId);
+  absoluteTimerId = setTimeout(()=>{
+    ensureAbsoluteOverlay().style.display='grid';
+    playDing(); // sfx_terminal_ding
+    absoluteShown = true;
+  }, 5000);
+}
+
+
+function ensureAbsoluteOverlay(){
+  if(absoluteOverlay) return absoluteOverlay;
+  const wrap=document.createElement('div');
+  Object.assign(wrap.style,{position:'fixed',inset:'0',display:'none',placeItems:'center',background:'rgba(0,0,0,.6)',zIndex:'10000'});
+  const panel=document.createElement('div');
+  Object.assign(panel.style,{padding:'16px',background:'#111',border:'2px solid #444',borderRadius:'12px'});
+  const img=document.createElement('img');
+  img.alt='Absolute Complete';
+  img.style.maxWidth='min(80vw,800px)';
+  img.style.maxHeight='70vh';
+  img.style.imageRendering='pixelated';
+  img.src = ASSETS.absoluteCompletePNG;
+  const btn=document.createElement('button');
+  btn.textContent='Close';
+  Object.assign(btn.style,{display:'block',margin:'12px auto 0',padding:'8px 16px',cursor:'pointer',background:'#1b1b1b',color:'#fff',border:'1px solid #555',borderRadius:'8px'});
+  btn.onclick=()=>{ wrap.style.display='none'; };
+  panel.appendChild(img); panel.appendChild(btn); wrap.appendChild(panel);
+  document.body.appendChild(wrap);
+  absoluteOverlay=wrap; return wrap;
+}
+
 
   
   /* ========== Monde & contenu ========== */
@@ -402,6 +454,8 @@ let worldReady=false;
 function loadAll(){
   const L = (src)=>loadImg(src);
   const tasks = [];
+  tasks.push(L(ASSETS.absoluteCompletePNG).then(i=>{ images.absoluteComplete = i; }).catch(()=>{}));
+
 
   // Fonds
   tasks.push(L(ASSETS.back ).then(i=>{ images.back  = i; }).catch(()=>{}));
@@ -937,7 +991,7 @@ if(!wasOnGround && player.onGround){
       const feetY=GROUND_Y-110+player.y;
       const over=aabb(player.x-26,feetY,52,110, p.x,p.y,p.w,p.h);
       if(!p.taken && !p.taking && dx<=COLLECT_RADIUS && over && wantsDown){ p.taking=true; p.t=0; }
-      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount++; setWanted(); if(sfx.wanted) sfx.wanted.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){
+      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1); setWanted(); if(sfx.wanted) sfx.wanted.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){
   if(sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
   ensureOverlay().style.display='grid';
   playDing(); // ding au moment d’afficher l’overlay
@@ -1025,15 +1079,17 @@ function exitInterior(){
     player.y=0; player.vy=0; player.onGround=true;
   }
 
-  const shouldShow = pendingAllComplete;
+  const showAll = pendingAllComplete;
+  const showAbs = pendingAbsoluteComplete;
   pendingAllComplete = false;
+  pendingAbsoluteComplete = false;
   currentB = null;
 
-if(shouldShow){
-  setTimeout(()=>{
-    ensureAllCompleteOverlay().style.display='grid';
-    if(sfx.ding){ try{ sfx.ding.currentTime=0; sfx.ding.play(); }catch(_){} }
-  }, 5000);
+  if (showAbs) {
+    setTimeout(()=>{ ensureAbsoluteOverlay().style.display='grid'; playDing(); }, 5000);
+  } else if (showAll) {
+    setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; playDing(); }, 5000);
+  }
 }
 }
 
@@ -1090,12 +1146,16 @@ dashTrailT=Math.max(0, dashTrailT - dt);
       hacking=false; hackT=0; if(sfx.ding) sfx.ding.play().catch(()=>{});
       if(currentB && !hackedIds.has(currentB.id)){
         hackedIds.add(currentB.id);
-        eggIndex=Math.min(10,eggIndex+1); eggs=eggIndex; setEggs();
+        eggIndex = Math.min(MAX_COUNT_CAP, eggIndex + 1);
+eggs = eggIndex;
+setEggs();
+
       }
       interiorOpenIdx=Math.max(1,eggIndex); // 1→10
 
       // Ne pas afficher ici : on flag pour l’afficher 2s après la sortie
       if (eggIndex >= 10 && postersCount >= 10) pendingAllComplete = true;
+      if (eggIndex >= 11 && postersCount >= 11) pendingAbsoluteComplete = true;
     }
   }
 
