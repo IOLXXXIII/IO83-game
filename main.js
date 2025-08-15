@@ -215,15 +215,17 @@ try{
 
 
   };
-const images={
-  back:null, mid:null, front:null, myoIdle:[], myoWalk:[],
+const images = {
+  back:null, mid:null, front:null,
+  myoIdle:[], myoWalk:[],
   posterWith:null, posterWithout:null,
-  npcs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
-  dialogs:{aeron:[],kaito:[],maonis:[],kahikoans:[]},
+  npcs:{aeron:[], kaito:[], maonis:[], kahikoans:[]},
+  dialogs:{aeron:[], kaito:[], maonis:[], kahikoans:[]},
   buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
   interiorClosedIdle:[], interiorOpens:[],
   postersComplete:null, allComplete:null, absoluteComplete:null,
   jumpDust:[]
+};
 
   postersComplete:null, allComplete:null, absoluteComplete:null, jumpDust:[]
 
