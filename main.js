@@ -218,6 +218,7 @@ const images={
 
   // Dash (2e dash dispo après 2e saut)
   const DASH_WINDOW=0.22, DASH_DUR=0.18, DASH_COOL_G=0.6, DASH_COOL_A=0.28, DASH_MULT=4;
+  const NPC_MAONIS_RATE = 0.18; // 18% de Maonis (mets 0.10–0.25 selon ton goût)
   let lastTapL=-999,lastTapR=-999,dashTimer=0,dashCooldown=0,airDashUsed=0;
 
   /* ========== Camera lookahead & micro shake ========== */
@@ -343,7 +344,8 @@ function checkAllComplete(){
   if(allCompleteTimerId) clearTimeout(allCompleteTimerId);
   allCompleteTimerId = setTimeout(()=>{
     ensureAllCompleteOverlay().style.display='grid';
-    playDing();
+    // DING quand on l’affiche
+    if(sfx.ding){ try{ sfx.ding.currentTime=0; sfx.ding.play(); }catch(_){} }
   }, 5000);
 }
 
@@ -1014,13 +1016,11 @@ function exitInterior(){
   pendingAllComplete = false;
   currentB = null;
 
-  if(shouldShow){
-    setTimeout(()=>{
-  ensureAllCompleteOverlay().style.display='grid';
-  playDing();
-}, 5000);
-
-  }
+if(shouldShow){
+  setTimeout(()=>{
+    ensureAllCompleteOverlay().style.display='grid';
+    if(sfx.ding){ try{ sfx.ding.currentTime=0; sfx.ding.play(); }catch(_){} }
+  }, 5000);
 }
 
 
