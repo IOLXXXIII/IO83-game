@@ -72,6 +72,17 @@ addEventListener('resize',resize);
     return e;
   })();
 
+  // Aligne la couleur des œufs sur celle du compteur Wanted
+try{
+  const wantedColor = scoreEl ? getComputedStyle(scoreEl).color : null;
+  if(wantedColor){
+    const eggsDiv = document.getElementById('eggs'); // contient "??? "
+    if(eggsDiv) eggsDiv.style.color = wantedColor;   // "??? " en jaune
+    if(eggBox)  eggBox.style.color  = wantedColor;   // "0/10" en jaune
+  }
+}catch(_){}
+
+
   // Variables utilisées par checkAllComplete (déclarées AVANT toute utilisation)
   let allCompleteOverlay = null;
   let allCompleteTimerId = null;
@@ -842,13 +853,15 @@ dashTrailT=Math.max(0, dashTrailT - dt);
 if(jumpBuf>0){
   if(player.onGround||coyote>0){
     player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0;
+
+    if (DUST_ON_TAKEOFF) spawnDust(player.x, GROUND_Y + player.y); // ← poussière
+
     playJump(); // son uniquement pour le saut du sol
   } else if(airJumpsUsed<AIR_JUMPS){
     airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0;
     // pas de son ici
   }
 }
-
 
 
 // Gravity (variable jump height)
