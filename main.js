@@ -209,6 +209,9 @@ let shakeAmp = 0;              // amplitude écran
 function addShake(s){ shakeAmp = Math.min(6, shakeAmp + s); }
 
 const DASH_TRAIL_FPS = 8; // ~10–11% plus lent que 9
+  const DASH_TRAIL_VIS = 0.32; // durée d’affichage du trail en secondes
+let dashTrailT = 0;          // compte à rebours du trail
+
 
 
 /* ========== Variable jump (tap court / long) ========== */
@@ -234,7 +237,7 @@ function drawFX(yOff){
     const dw = Math.round(img.width * s);
     const dh = Math.round(img.height* s);
     const sx = Math.round(f.x - cameraX - dw/2);
-    const sy = Math.round(f.y + yOff - dh);
+    const sy = Math.round(f.y + yOff - dh + Math.round(dh*0.15));
     ctx.drawImage(img, sx, sy, dw, dh);
   }
 }
@@ -309,16 +312,19 @@ function ensureAllCompleteOverlay(){
 
 // Hoistée (déclarée en function) → peut être appelée depuis n’importe où
 function checkAllComplete(){
-  if(allCompleteShown) return;
-  if(eggs>=10 && postersCount>=POSTERS_TOTAL){
-    if(!allCompleteTimerId){
-      allCompleteTimerId = setTimeout(()=>{
-        ensureAllCompleteOverlay().style.display='grid';
-        allCompleteShown = true;
-      }, 10000); // 10 secondes
-    }
-  }
+  // Condition : au moins 10/10 pour les deux compteurs
+  if(!(eggs>=10 && postersCount>=10)) return;
+
+  // Jamais en intérieur
+  if(mode!=='world') return;
+
+  // Affiche ~2 s après la dernière mise à jour
+  if(allCompleteTimerId) clearTimeout(allCompleteTimerId);
+  allCompleteTimerId = setTimeout(()=>{
+    ensureAllCompleteOverlay().style.display='grid';
+  }, 2000);
 }
+
 
   
   /* ========== Monde & contenu ========== */
@@ -666,9 +672,13 @@ function drawMyo(runVel,yOff,H=MYO_H){
   const x=Math.floor(player.x - cameraX - dw/2);
   const y=GROUND_Y - dh + player.y + yOff + footPad;
 
-  // Dash trail — symétrique + flip à gauche
-  if(dashTimer>0 && images.dashTrail.length){
-    const ti = images.dashTrail[Math.floor(player.animTime * DASH_TRAIL_FPS) % images.dashTrail.length];
+  // Dash trail — animé par un timer dédié (toujours de la 1ère à la dernière frame)
+  if(dashTrailT>0 && images.dashTrail.length){
+    const u = 1 - (dashTrailT / DASH_TRAIL_VIS); // 0 → 1
+    let tiIndex = Math.floor(u * images.dashTrail.length);
+    if(tiIndex>=images.dashTrail.length) tiIndex = images.dashTrail.length-1;
+    const ti = images.dashTrail[tiIndex];
+
     const c  = x + dw/2; // centre du perso
     const cx = c + (player.facing==='left' ? +DASH_TRAIL_OFF : -DASH_TRAIL_OFF);
     const sx = Math.round(cx - dw/2);
@@ -677,7 +687,7 @@ function drawMyo(runVel,yOff,H=MYO_H){
     ctx.save();
     ctx.globalAlpha = 0.85;
     if(player.facing==='left'){
-      // flip du trail autour de son centre → parfait miroir
+      // flip parfait autour du centre → symétrie exacte
       ctx.translate(sx + dw/2, sy + dh/2);
       ctx.scale(-1,1);
       ctx.translate(-dw/2, -dh/2);
@@ -700,6 +710,7 @@ function drawMyo(runVel,yOff,H=MYO_H){
   }
   ctx.restore();
 }
+
 
   
   function drawBuildings(yOff){
@@ -756,16 +767,21 @@ if(n.show){
   }
 
   /* ========== Mouvement / Dash ========== */
-  function tryDash(dir){
-    if(dashCooldown>0) return;
-    if(!player.onGround){
-      const max=1 + (airJumpsUsed>0?1:0);
-      if(airDashUsed>=max) return;
-      airDashUsed++; dashCooldown=DASH_COOL_A;
-    }else{ airDashUsed=0; dashCooldown=DASH_COOL_G; }
-    dashTimer = DASH_DUR; player.facing = dir; addShake(0.4); if(sfx.dash) sfx.dash.play().catch(()=>{});
+function tryDash(dir){
+  if(dashCooldown>0) return;
+  if(!player.onGround){
+    const max=1 + (airJumpsUsed>0?1:0);
+    if(airDashUsed>=max) return;
+    airDashUsed++; dashCooldown=DASH_COOL_A;
+  }else{ airDashUsed=0; dashCooldown=DASH_COOL_G; }
 
-  }
+  dashTimer = DASH_DUR;          // durée du dash physique (inchangée)
+  dashTrailT = DASH_TRAIL_VIS;   // lance l’anim du trail (durée un peu plus longue)
+  player.facing = dir;
+  addShake(0.4);
+  if(sfx.dash) sfx.dash.play().catch(()=>{});
+}
+
 
   /* ========== Loops ========== */
   let mode='world', interiorOpenIdx=0, hacking=false, hackT=0, currentB=null;
@@ -793,7 +809,9 @@ player.x = Math.max(0, Math.min(player.x + vx*dt, hardMaxX));
 
     if(player.onGround){ coyote=COYOTE_TIME; airJumpsUsed=0; airDashUsed=0; }
     else coyote=Math.max(0,coyote-dt);
-    jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
+    jumpBuf=Math.max(0,jumpBuf-dt);
+dashCooldown=Math.max(0,dashCooldown-dt);
+dashTrailT=Math.max(0, dashTrailT - dt);
     if(dropThrough>0) dropThrough=Math.max(0,dropThrough-dt);
 
 // Jump (variable height + FX)
@@ -997,7 +1015,9 @@ function updateInterior(dt){
 
   if(player.onGround){ coyote=COYOTE_TIME; airJumpsUsed=0; airDashUsed=0; }
   else coyote=Math.max(0,coyote-dt);
-  jumpBuf=Math.max(0,jumpBuf-dt); dashCooldown=Math.max(0,dashCooldown-dt);
+  jumpBuf=Math.max(0,jumpBuf-dt);
+dashCooldown=Math.max(0,dashCooldown-dt);
+dashTrailT=Math.max(0, dashTrailT - dt);
 
   if(jumpBuf>0){
     if(player.onGround||coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
@@ -1038,7 +1058,7 @@ function updateInterior(dt){
       interiorOpenIdx=Math.max(1,eggIndex); // 1→10
 
       // Ne pas afficher ici : on flag pour l’afficher 2s après la sortie
-      if(eggIndex>=10) pendingAllComplete = true;
+      if (eggIndex >= 10 && postersCount >= 10) pendingAllComplete = true;
     }
   }
 
