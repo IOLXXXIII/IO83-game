@@ -272,7 +272,7 @@ addEventListener('keyup',e=>{
   const player={x:220,y:0,vy:0,onGround:true,facing:'right',state:'idle',animTime:0};
 
 /* ========== Posters ========== */
-const POSTER_SIZE=Math.round(100*1.2*1.15);
+const POSTER_SIZE=Math.round(100*1.2*1.25);
 const COLLECT_RADIUS=76, COLLECT_DUR=0.15, COLLECT_AMP=6;
   const posters=[];
   let postersOverlay=null;
