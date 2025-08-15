@@ -1022,7 +1022,7 @@ if(shouldShow){
     if(sfx.ding){ try{ sfx.ding.currentTime=0; sfx.ding.play(); }catch(_){} }
   }, 5000);
 }
-
+}
 
 function updateInterior(dt){
   const W=canvas.width/DPR, H=canvas.height/DPR;
