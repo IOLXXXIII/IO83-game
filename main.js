@@ -55,7 +55,7 @@ addEventListener('resize',resize);
   const hud = document.getElementById('hud');
 
   let postersCount = 0, eggs = 0;          // ← UNE SEULE FOIS
-  const POSTERS_TOTAL = 11;
+  const POSTERS_TOTAL = 10;
   const MAX_COUNT_CAP = 11; // cap d'affichage/compte à 11
 
 
@@ -93,6 +93,8 @@ try{
   let absoluteTimerId = null;
   let absoluteShown   = false;
   let pendingAbsoluteComplete = false;
+  let postersCompleteShown = false;
+
 
 
 
@@ -223,10 +225,6 @@ const images = {
   dialogs:{aeron:[], kaito:[], maonis:[], kahikoans:[]},
   buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
   interiorClosedIdle:[], interiorOpens:[],
-  postersComplete:null, allComplete:null, absoluteComplete:null,
-  jumpDust:[]
-};
-
   postersComplete:null, allComplete:null, absoluteComplete:null, jumpDust:[]
 
 };
@@ -365,20 +363,19 @@ function ensureAllCompleteOverlay(){
 
 // Hoistée (déclarée en function) → peut être appelée depuis n’importe où
 function checkAllComplete(){
-  // Condition : au moins 10/10 pour les deux compteurs
-  if(!(eggs>=10 && postersCount>=10)) return;
+  // All : uniquement quand Posters = 11/10 ET ??? = 11/10
+  if (allCompleteShown) return;
+  if (!(eggs >= 11 && postersCount >= 11)) return;
+  if (mode !== 'world') return; // jamais en intérieur
 
-  // Jamais en intérieur
-  if(mode!=='world') return;
-
-  // Affiche ~5 s après la dernière mise à jour
-  if(allCompleteTimerId) clearTimeout(allCompleteTimerId);
+  if (allCompleteTimerId) clearTimeout(allCompleteTimerId);
   allCompleteTimerId = setTimeout(()=>{
     ensureAllCompleteOverlay().style.display='grid';
-    // DING quand on l’affiche
-    if(sfx.ding){ try{ sfx.ding.currentTime=0; sfx.ding.play(); }catch(_){} }
+    playDing();
+    allCompleteShown = true;
   }, 5000);
 }
+
 
 function checkAbsoluteComplete(){
   // Condition : 11/11 minimum
@@ -995,13 +992,25 @@ if(!wasOnGround && player.onGround){
       const feetY=GROUND_Y-110+player.y;
       const over=aabb(player.x-26,feetY,52,110, p.x,p.y,p.w,p.h);
       if(!p.taken && !p.taking && dx<=COLLECT_RADIUS && over && wantsDown){ p.taking=true; p.t=0; }
-      if(p.taking){ p.t+=dt; if(p.t>=COLLECT_DUR){ p.taking=false; p.taken=true; postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1); setWanted(); if(sfx.wanted) sfx.wanted.play().catch(()=>{}); if(postersCount>=POSTERS_TOTAL){
-  if(sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
-  ensureOverlay().style.display='grid';
-  playDing(); // ding au moment d’afficher l’overlay
-}
- } }
+if (p.taking) {
+  p.t += dt;
+  if (p.t >= COLLECT_DUR) {
+    p.taking = false;
+    p.taken = true;
+    postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
+    setWanted();
+    if (sfx.wanted) sfx.wanted.play().catch(()=>{});
+
+    // Posters : à 10/10, une seule fois
+    if (!postersCompleteShown && postersCount >= POSTERS_TOTAL) {
+      if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
+      ensureOverlay().style.display = 'grid';
+      playDing();
+      postersCompleteShown = true;
     }
+  }
+}
+
 
     // Portes
     if(wantsDown && !onPlatform && dropThrough<=0){
@@ -1089,11 +1098,12 @@ function exitInterior(){
   pendingAbsoluteComplete = false;
   currentB = null;
 
-  if (showAbs) {
-    setTimeout(()=>{ ensureAbsoluteOverlay().style.display='grid'; playDing(); }, 5000);
-  } else if (showAll) {
-    setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; playDing(); }, 5000);
-  }
+if (showAll) {
+  setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; playDing(); }, 5000);
+}
+if (showAbs) {
+  setTimeout(()=>{ ensureAbsoluteOverlay().style.display='grid'; playDing(); }, 5400);
+}
 }
 
 function updateInterior(dt){
@@ -1157,8 +1167,9 @@ setEggs();
       interiorOpenIdx=Math.max(1,eggIndex); // 1→10
 
       // Ne pas afficher ici : on flag pour l’afficher 2s après la sortie
-      if (eggIndex >= 10 && postersCount >= 10) pendingAllComplete = true;
-      if (eggIndex >= 11 && postersCount >= 11) pendingAbsoluteComplete = true;
+if (eggIndex >= 11 && postersCount >= 11) pendingAllComplete = true;
+if (eggIndex >= 11 && postersCount >= 11) pendingAbsoluteComplete = true;
+
     }
   }
 
