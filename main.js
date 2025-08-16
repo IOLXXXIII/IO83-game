@@ -382,7 +382,7 @@ function checkAllComplete(){
     ensureAllCompleteOverlay().style.display='grid';
     playDing();
     allCompleteShown = true;
-  }, 5000);
+  }, 3000);
 }
 
 
@@ -398,7 +398,7 @@ function checkAbsoluteComplete(){
     ensureAbsoluteOverlay().style.display='grid';
     playDing(); // sfx_terminal_ding
     absoluteShown = true;
-  }, 5000);
+  }, 3000);
 }
 
 
@@ -1119,10 +1119,10 @@ function exitInterior(){
   currentB = null;
 
 if (showAll) {
-  setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; playDing(); }, 5000);
+  setTimeout(()=>{ ensureAllCompleteOverlay().style.display='grid'; playDing(); }, 3000);
 }
 if (showAbs) {
-  setTimeout(()=>{ ensureAbsoluteOverlay().style.display='grid'; playDing(); }, 5400);
+  setTimeout(()=>{ ensureAbsoluteOverlay().style.display='grid'; playDing(); }, 3000);
 }
 }
 
