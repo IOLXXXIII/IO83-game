@@ -22,31 +22,36 @@ window.addEventListener('error', function(ev){
   const rint=(a,b)=>Math.floor(rnd(a,b+1));
   const aabb=(ax,ay,aw,ah,bx,by,bw,bh)=>ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
 
-  /* ========== Canvas ========== */
-/* ========== Canvas ========== */
-const canvas=document.getElementById('game');
-if(!canvas){
-  console.error('[IO83] Canvas #game introuvable');
-  return;
-}
+/* ========== Canvas (lazy init) ========== */
+let canvas = null;
 let ctx = null;
-try{
-  ctx = canvas.getContext('2d', {alpha:false});
-}catch(e){}
-if(!ctx) ctx = canvas.getContext('2d');
-if(!ctx){
-  console.error('[IO83] Contexte 2D introuvable');
-  return;
-}
-const DPR=Math.max(1,Math.floor(window.devicePixelRatio||1));
+const DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+
 function resize(){
-  const w=1280,h=720;
-  canvas.width=w*DPR; canvas.height=h*DPR;
-  ctx.imageSmoothingEnabled=false;
+  if(!canvas || !ctx) return;
+  const w = 1280, h = 720;
+  canvas.width = w * DPR; 
+  canvas.height = h * DPR;
+  ctx.imageSmoothingEnabled = false;
   ctx.setTransform(DPR,0,0,DPR,0,0);
 }
-resize();
-addEventListener('resize',resize);
+
+let resizeHooked = false;
+function ensureCanvas(){
+  if (canvas && ctx) return true;
+  const el = document.getElementById('game');
+  if(!el){ console.error('[IO83] Canvas #game introuvable'); return false; }
+  canvas = el;
+  try{
+    ctx = canvas.getContext('2d', {alpha:false});
+  }catch(e){}
+  if(!ctx) ctx = canvas.getContext('2d');
+  if(!ctx){ console.error('[IO83] Contexte 2D introuvable'); return false; }
+  resize();
+  if(!resizeHooked){ addEventListener('resize', resize); resizeHooked = true; }
+  return true;
+}
+
 
 
   /* ========== Gate / HUD ========== */
@@ -985,31 +990,39 @@ if(!wasOnGround && player.onGround){
       else if(n.show){ n.hideT=(n.hideT||0)+dt; if(n.hideT>=NPC_HIDE_DELAY){ n.show=false; n.dialogImg=null; n.hideT=0; } }
     }
 
-    // Posters
-    const wantsDown=keys.has('ArrowDown')||keys.has('s');
-    for(const p of posters){
-      const center=p.x+p.w/2, dx=Math.abs(player.x-center);
-      const feetY=GROUND_Y-110+player.y;
-      const over=aabb(player.x-26,feetY,52,110, p.x,p.y,p.w,p.h);
-      if(!p.taken && !p.taking && dx<=COLLECT_RADIUS && over && wantsDown){ p.taking=true; p.t=0; }
-if (p.taking) {
-  p.t += dt;
-  if (p.t >= COLLECT_DUR) {
-    p.taking = false;
-    p.taken = true;
-    postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
-    setWanted();
-    if (sfx.wanted) sfx.wanted.play().catch(()=>{});
+// Posters
+const wantsDown = keys.has('ArrowDown') || keys.has('s');
+for (const p of posters){
+  const center = p.x + p.w/2;
+  const dx = Math.abs(player.x - center);
+  const feetY = GROUND_Y - 110 + player.y;
+  const over = aabb(player.x-26, feetY, 52, 110, p.x, p.y, p.w, p.h);
 
-    // Posters : à 10/10, une seule fois
-    if (!postersCompleteShown && postersCount >= POSTERS_TOTAL) {
-      if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
-      ensureOverlay().style.display = 'grid';
-      playDing();
-      postersCompleteShown = true;
+  if (!p.taken && !p.taking && dx <= COLLECT_RADIUS && over && wantsDown){
+    p.taking = true; 
+    p.t = 0;
+  }
+
+  if (p.taking){
+    p.t += dt;
+    if (p.t >= COLLECT_DUR){
+      p.taking = false;
+      p.taken = true;
+      postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
+      setWanted();
+      if (sfx.wanted) sfx.wanted.play().catch(()=>{});
+
+      // Posters → à 10/10 (une seule fois)
+      if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
+        if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
+        ensureOverlay().style.display = 'grid';
+        playDing();
+        postersCompleteShown = true;
+      }
     }
   }
 }
+
 
 
     // Portes
@@ -1201,11 +1214,18 @@ if (eggIndex >= 11 && postersCount >= 11) pendingAbsoluteComplete = true;
 function boot(){
   startBtn.disabled = true;
   startBtn.textContent = 'Loading…';
+  if(!ensureCanvas()){
+    // canvas pas prêt → ne pas bloquer le bouton
+    startBtn.disabled = false;
+    startBtn.textContent = 'Start';
+    return;
+  }
   loadAll().then(function(){
     gate.style.display = 'none';
     requestAnimationFrame(loop);
   });
 }
+
 function tryStart(){ startAudio(); boot(); }
 
 // Attache robuste (click + pointerdown) et “once” manuel
