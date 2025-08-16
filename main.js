@@ -368,9 +368,13 @@ function ensureAllCompleteOverlay(){
 
 // Hoistée (déclarée en function) → peut être appelée depuis n’importe où
 function checkAllComplete(){
-  // All : uniquement quand Posters = 11/10 ET ??? = 11/10
+  // All : quand Posters = 10/10 ET ??? = 10/10 (mais pas à 11/11)
   if (allCompleteShown) return;
-  if (!(eggs >= 11 && postersCount >= 11)) return;
+
+  const atLeast10 = (eggs >= 10 && postersCount >= 10);
+  const notYet11  = !(eggs >= 11 && postersCount >= 11); // évite un déclenchement à 11/11
+
+  if (!(atLeast10 && notYet11)) return;
   if (mode !== 'world') return; // jamais en intérieur
 
   if (allCompleteTimerId) clearTimeout(allCompleteTimerId);
@@ -380,6 +384,7 @@ function checkAllComplete(){
     allCompleteShown = true;
   }, 5000);
 }
+
 
 
 function checkAbsoluteComplete(){
@@ -439,6 +444,7 @@ function ensureAbsoluteOverlay(){
   }
 
   const NPC_TALK_RADIUS=160, NPC_HIDE_DELAY=1.0;
+  const NPC_TURN_OFFSET = 40; // ← augmente pour décaler davantage vers la droite (ex: 60, 80…)
   const npcs=[];
   let eggIndex=0; const hackedIds=new Set(); eggs=eggIndex; setEggs();
 
@@ -821,7 +827,8 @@ function drawMyo(runVel,yOff,H=MYO_H){
       const s=NPC_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
       const footPad=Math.round(dh*FOOT_PAD_RATIO);
       const sy=(GROUND_Y+yOff)-dh+footPad, sx=Math.floor(n.x - cameraX);
-      if(player.x<n.x) n.face='left'; else if(player.x>n.x) n.face='right';
+      const flipX = n.x + NPC_TURN_OFFSET;
+      if (player.x < flipX) n.face = 'left'; else if (player.x > flipX) n.face = 'right';
       const img=n.frames[Math.floor(n.animT*2)%2]||base;
       ctx.save();
       if(n.face==='left'){ ctx.translate(sx+dw/2,sy); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img,0,0,dw,dh); }
@@ -1179,9 +1186,13 @@ setEggs();
       }
       interiorOpenIdx=Math.max(1,eggIndex); // 1→10
 
-      // Ne pas afficher ici : on flag pour l’afficher 2s après la sortie
-if (eggIndex >= 11 && postersCount >= 11) pendingAllComplete = true;
-if (eggIndex >= 11 && postersCount >= 11) pendingAbsoluteComplete = true;
+      // Ne pas afficher ici : on flag pour l’afficher après la sortie
+      if (!allCompleteShown && eggIndex >= 10 && postersCount >= 10 && !(eggIndex >= 11 && postersCount >= 11)) {
+        pendingAllComplete = true;
+      }
+      if (!absoluteShown && eggIndex >= 11 && postersCount >= 11) {
+        pendingAbsoluteComplete = true;
+      }
 
     }
   }
