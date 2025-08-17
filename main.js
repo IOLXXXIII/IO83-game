@@ -99,6 +99,12 @@ if (startBtn){
 const gateUI = (() => {
   if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
+  // Création des <img>
+  const startImg   = document.createElement('img');
+  const loadingImg = document.createElement('img');
+  startImg.id = 'startImg';
+  loadingImg.id = 'loadingImg';
+
   // Styles : START centré vers le bas (360×360), LOADING en bas à droite (200×81)
   Object.assign(startImg.style, {
     position:'absolute', left:'50%', transform:'translateX(-50%)',
