@@ -48,7 +48,7 @@ html,body{
 }
 
 /* Le bouton doit être tout en haut dans #gate */
-#gate button {
+#gate button { bottom: clamp(12px, 5vh, 48px); }
   z-index: 10;
 }
 
