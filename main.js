@@ -827,8 +827,10 @@ function drawMyo(runVel,yOff,H=MYO_H){
       const s=NPC_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
       const footPad=Math.round(dh*FOOT_PAD_RATIO);
       const sy=(GROUND_Y+yOff)-dh+footPad, sx=Math.floor(n.x - cameraX);
-      const flipX = n.x + NPC_TURN_OFFSET;
-      if (player.x < flipX) n.face = 'left'; else if (player.x > flipX) n.face = 'right';
+      // Centre ↔ centre, symétrique
+      const npcCenter = n.x + dw/2; // dw = largeur réellement dessinée (déjà calculée juste au-dessus)
+      if (player.x < npcCenter - NPC_TURN_HYST)      n.face = 'left';
+      else if (player.x > npcCenter + NPC_TURN_HYST) n.face = 'right';
       const img=n.frames[Math.floor(n.animT*2)%2]||base;
       ctx.save();
       if(n.face==='left'){ ctx.translate(sx+dw/2,sy); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img,0,0,dw,dh); }
