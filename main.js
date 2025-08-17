@@ -57,17 +57,8 @@ function ensureCanvas(){
   /* ========== Gate / HUD ========== */
   const gate = document.getElementById('gate');
   const startBtn = document.getElementById('startBtn');
-// Gate = overlay plein écran (sinon il fait 0px de haut)
-if (gate){
-  Object.assign(gate.style, {
-    position:'fixed',
-    left:'0', top:'0', right:'0', bottom:'0',
-    zIndex:'9998',
-    background:'#000',   // fond noir sous le START/LOADING
-    display:'block'      // garantit qu'il est visible au boot
-  });
-}
 
+  
 // Laisse le bouton visible (stylé par le CSS)
 if (startBtn){
   // On ne touche pas à son style ici → c'est le CSS (#gate button) qui s'applique.
