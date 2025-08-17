@@ -57,14 +57,26 @@ function ensureCanvas(){
   /* ========== Gate / HUD ========== */
   const gate = document.getElementById('gate');
   const startBtn = document.getElementById('startBtn');
-  if (gate) gate.style.position = gate.style.position || 'relative';
+// Gate = overlay plein écran (sinon il fait 0px de haut)
+if (gate){
+  Object.assign(gate.style, {
+    position:'fixed',
+    left:'0', top:'0', right:'0', bottom:'0',
+    zIndex:'9998',
+    background:'#000',   // fond noir sous le START/LOADING
+    display:'block'      // garantit qu'il est visible au boot
+  });
+}
+
+// Bouton invisible mais cliquable partout sur le gate
 if (startBtn){
   Object.assign(startBtn.style, {
-    position:'absolute', inset:'0',      // couvre tout le gate
-    opacity:'0', cursor:'pointer',       // invisible mais cliquable
+    position:'absolute', inset:'0',
+    opacity:'0', cursor:'pointer',
     background:'transparent', border:'0'
   });
 }
+
 
   const hud = document.getElementById('hud');
 
@@ -228,8 +240,9 @@ try{
     postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
     allCompletePNG:'assets/collectibles/all_complete.png'+CB,
     absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB,
-    uiStart: ['assets/ui/start/start_idle_1.png'+CB, 'assets/ui/start/start_idle_2.png'+CB],
+    uiStart:   ['assets/ui/start/start_idle_1.png'+CB, 'assets/ui/start/start_idle_2.png'+CB],
     uiLoading: Array.from({length:5}, (_,i)=>`assets/ui/loading/loading_idle_${i+1}.png${CB}`),
+
     
 
 
