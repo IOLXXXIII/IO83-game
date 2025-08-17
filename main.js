@@ -444,7 +444,7 @@ function ensureAbsoluteOverlay(){
   }
 
   const NPC_TALK_RADIUS=160, NPC_HIDE_DELAY=1.0;
-  const NPC_TURN_OFFSET = 500; // ← augmente pour décaler davantage vers la droite (ex: 60, 80…)
+  const NPC_TURN_OFFSET = 100; // ← augmente pour décaler davantage vers la droite (ex: 60, 80…)
   const npcs=[];
   let eggIndex=0; const hackedIds=new Set(); eggs=eggIndex; setEggs();
 
