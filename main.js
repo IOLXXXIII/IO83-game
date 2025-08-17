@@ -124,7 +124,9 @@ try{
     checkAllComplete();
     checkAbsoluteComplete(); // ← ajout
   };
-
+  
+// Déclaré tôt pour éviter la TDZ dans checkAllComplete / checkAbsoluteComplete
+let mode = 'world';
   setWanted();
   setEggs();
 
@@ -989,7 +991,8 @@ function tryDash(dir){
 
 
   /* ========== Loops ========== */
-  let mode='world', interiorOpenIdx=0, hacking=false, hackT=0, currentB=null;
+  // (mode est déjà déclaré plus haut)
+let interiorOpenIdx=0, hacking=false, hackT=0, currentB=null;
 
   function updateWorld(dt){
     const wasOnGround = player.onGround;
