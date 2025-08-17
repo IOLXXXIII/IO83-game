@@ -79,6 +79,77 @@ function ensureCanvas(){
     return e;
   })();
 
+// ——— Gate UI (start + loading) ———
+const gateUI = (() => {
+  if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
+
+  // Création des <img>
+  const startImg   = document.createElement('img');
+  const loadingImg = document.createElement('img');
+
+  startImg.id = 'startImg';
+  loadingImg.id = 'loadingImg';
+
+  // Styles : START centré vers le bas (360×360), LOADING en bas à droite (200×81)
+  Object.assign(startImg.style, {
+    position:'absolute', left:'50%', transform:'translateX(-50%)',
+    bottom:'8%', width:'360px', height:'360px',
+    imageRendering:'pixelated', pointerEvents:'none', userSelect:'none'
+  });
+  Object.assign(loadingImg.style, {
+    position:'absolute', right:'24px', bottom:'24px',
+    width:'200px', height:'81px',
+    imageRendering:'pixelated', pointerEvents:'none', userSelect:'none', display:'none'
+  });
+
+  // Première frames
+  startImg.src   = (ASSETS.uiStart && ASSETS.uiStart[0])   || '';
+  loadingImg.src = (ASSETS.uiLoading && ASSETS.uiLoading[0]) || '';
+
+  // Ajout au gate
+  gate.style.position = gate.style.position || 'relative';
+  gate.appendChild(startImg);
+  gate.appendChild(loadingImg);
+
+  // Petit moteur d’animation (alterne les src à fps fixe)
+  function makeAnimator(el, frames, fps){
+    let i = 0, id = null;
+    function tick(){
+      i = (i+1) % frames.length;
+      el.src = frames[i];
+    }
+    return {
+      start(){ if(!frames || frames.length<=1 || id) return; id=setInterval(tick, Math.max(60, Math.floor(1000/fps))); },
+      stop(){ if(id){ clearInterval(id); id=null; } },
+      setVisible(v){ el.style.display = v?'block':'none'; }
+    };
+  }
+
+  const startAnim   = makeAnimator(startImg,   ASSETS.uiStart   || [], 4); // 4 fps pour un idle doux
+  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 8); // 8 fps pour un “loading” plus vivant
+
+  // État initial : START visible + animé
+  startAnim.setVisible(true);
+  startAnim.start();
+  loadingAnim.setVisible(false);
+  loadingAnim.stop();
+
+  return {
+    showStart(){
+      startAnim.setVisible(true);  startAnim.start();
+      loadingAnim.setVisible(false); loadingAnim.stop();
+    },
+    showLoading(){
+      startAnim.setVisible(false);  startAnim.stop();
+      loadingAnim.setVisible(true); loadingAnim.start();
+    },
+    stopAll(){
+      startAnim.stop(); loadingAnim.stop();
+    }
+  };
+})();
+
+  
 // Couleur : seul le compteur (0/10) en jaune, pas "???"
 try{
   const wantedColor = scoreEl ? getComputedStyle(scoreEl).color : null;
@@ -219,6 +290,9 @@ try{
     postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
     allCompletePNG:'assets/collectibles/all_complete.png'+CB,
     absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB
+    uiStart: ['assets/ui/start/start_idle_1.png'+CB, 'assets/ui/start/start_idle_2.png'+CB],
+    uiLoading: Array.from({length:5}, (_,i)=>`assets/ui/loading/loading_idle_${i+1}.png${CB}`),
+
 
 
   };
@@ -231,7 +305,7 @@ const images = {
   buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
   interiorClosedIdle:[], interiorOpens:[],
   postersComplete:null, allComplete:null, absoluteComplete:null, jumpDust:[]
-
+  ui:{ start:[], loading:[] }  
 };
 
   const loadImg=src=>new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; });
@@ -488,6 +562,11 @@ function loadAll(){
       images.npcs[k] = arr.filter(Boolean);
     }).catch(()=>{ images.npcs[k]=[]; });
   })).catch(()=>{}));
+
+  // Loading et Start
+  tasks.push(Promise.all(ASSETS.uiStart.map(L)).then(arr=>{ images.ui.start = arr.filter(Boolean); }).catch(()=>{}));
+  tasks.push(Promise.all(ASSETS.uiLoading.map(L)).then(arr=>{ images.ui.loading = arr.filter(Boolean); }).catch(()=>{}));
+
 
   // Dialogs (facultatif)
   tasks.push(
@@ -1225,8 +1304,9 @@ setEggs();
 
 /* ========== Boot ========== */
 function boot(){
-  startBtn.disabled = true;
-  startBtn.textContent = 'Loading…';
+startBtn.disabled = true;
+// Affiche l'animation "loading" (en bas à droite)
+gateUI.showLoading();
   if(!ensureCanvas()){
     // canvas pas prêt → ne pas bloquer le bouton
     startBtn.disabled = false;
@@ -1235,6 +1315,7 @@ function boot(){
   }
   loadAll().then(function(){
     gate.style.display = 'none';
+    gateUI.stopAll();
     requestAnimationFrame(loop);
   });
 }
