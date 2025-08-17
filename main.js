@@ -583,27 +583,30 @@ function loadAll(){
   tasks.push(Promise.all(ASSETS.uiLoading.map(L)).then(arr=>{ images.ui.loading = arr.filter(Boolean); }).catch(()=>{}));
 
 
-  // Dialogs (facultatif)
-  tasks.push(
-    fetch(ASSETS.dialogsManifest)
-      .then(r=>r.json())
-      .then(function(mf){
-        const subtasks=[];
-        ['aeron','kaito','maonis','kahikoans'].forEach(function(k){
-          const list = (mf && mf[k]) ? mf[k] : [];
-          subtasks.push(
-            Promise.all(list.map(function(name){
-              const p = 'assets/ui/dialogs/'+k+'/'+name+CB;
-              return L(p);
-            }))
-            .then(function(arr){ images.dialogs[k] = arr.filter(Boolean); })
-            .catch(()=>{ images.dialogs[k]=[]; })
-          );
-        });
-        return Promise.all(subtasks);
-      })
-      .catch(()=>{})
-  );
+  // Dialogs (facultatif) — faire le fetch UNIQUEMENT en http(s) pour éviter les erreurs en file://
+  if (IS_HTTP) {
+    tasks.push(
+      fetch(ASSETS.dialogsManifest)
+        .then(r=>r.json())
+        .then(function(mf){
+          const subtasks=[];
+          ['aeron','kaito','maonis','kahikoans'].forEach(function(k){
+            const list = (mf && mf[k]) ? mf[k] : [];
+            subtasks.push(
+              Promise.all(list.map(function(name){
+                const p = 'assets/ui/dialogs/'+k+'/'+name+CB;
+                return L(p);
+              }))
+              .then(function(arr){ images.dialogs[k] = arr.filter(Boolean); })
+              .catch(()=>{ images.dialogs[k]=[]; })
+            );
+          });
+          return Promise.all(subtasks);
+        })
+        .catch(()=>{})
+    );
+  }
+
 
   // Bâtiments (4 types)
   tasks.push(Promise.all(ASSETS.buildings.map(function(pair){
@@ -1339,32 +1342,29 @@ function boot(){
   }
 
   loadAll().then(function(){
-    // ⚠️ Ne pas fermer l’écran titre si les visuels minimum ne sont pas là.
-    if (!assetsCruciauxOk()){
-      // On ré-affiche START, on explique, et on ne lance pas la boucle.
-      gateUI.showStart();
-      startBtn.disabled = false;
+    // On signale si des visuels minimum manquent, MAIS on lance quand même la boucle.
+    const missing = [
+      !(images.myoIdle && images.myoIdle[0]) ? 'images.myoIdle[0]' : null,
+      !images.front ? 'images.front (ground.png)' : null
+    ].filter(Boolean);
 
-      // Petit message discret en bas pour t’indiquer ce qui manque
+    if (missing.length){
       const note = document.getElementById('loadNote') || document.createElement('div');
       note.id = 'loadNote';
       Object.assign(note.style, {
         position:'absolute', bottom:'12px', left:'12px', right:'12px',
         font:'12px/1.4 system-ui', color:'#bbb', opacity:'0.9'
       });
-      const miss = [
-        !(images.myoIdle && images.myoIdle[0]) ? 'images.myoIdle[0]' : null,
-        !images.front ? 'images.front (ground.png)' : null
-      ].filter(Boolean).join(', ');
-      note.textContent = 'Chargement incomplet. Manque: ' + miss;
+      note.textContent = 'Chargement incomplet (fallback actif). Manque: ' + missing.join(', ');
       gate.appendChild(note);
-      return;
+      console.warn('[IO83] Fallback actif. Manque :', missing);
     }
 
     gate.style.display = 'none';
     gateUI.stopAll();
     requestAnimationFrame(loop);
   });
+
 }
 
 
