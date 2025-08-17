@@ -457,6 +457,7 @@ function ensureAllCompleteOverlay(){
 
 // Hoistée (déclarée en function) → peut être appelée depuis n’importe où
 function checkAllComplete(){
+  if (typeof mode === 'undefined') return; // ← évite la ReferenceError au boot
   // All : quand Posters = 10/10 ET ??? = 10/10 (mais pas à 11/11)
   if (allCompleteShown) return;
 
@@ -477,6 +478,7 @@ function checkAllComplete(){
 
 
 function checkAbsoluteComplete(){
+  if (typeof mode === 'undefined') return; // ← évite la ReferenceError au boot
   // Condition : 11/11 minimum
   if(!(eggs>=11 && postersCount>=11)) return;
   // Jamais en intérieur
