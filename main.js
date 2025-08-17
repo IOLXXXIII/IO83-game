@@ -68,14 +68,13 @@ if (gate){
   });
 }
 
-// Bouton invisible mais cliquable partout sur le gate
+// Laisse le bouton visible (stylé par le CSS)
 if (startBtn){
-  Object.assign(startBtn.style, {
-    position:'absolute', inset:'0',
-    opacity:'0', cursor:'pointer',
-    background:'transparent', border:'0'
-  });
+  // On ne touche pas à son style ici → c'est le CSS (#gate button) qui s'applique.
+  // On garantit juste qu'il reste cliquable.
+  startBtn.disabled = false;
 }
+
 
 
   const hud = document.getElementById('hud');
@@ -224,7 +223,7 @@ try{
       maonis:['assets/characters/maonis/maonis_idle_1.png'+CB,'assets/characters/maonis/maonis_idle_2.png'+CB],
       kahikoans:['assets/characters/kahikoans/kahikoans_idle_1.png'+CB,'assets/characters/kahikoans/kahikoans_idle_2.png'+CB]
     },
-    dialogsManifest:'config/dialogs_manifest.json'+CB,
+    dialogsManifest:'assets/config/dialogs_manifest.json'+CB,
     buildings:[
       ['assets/buildings/building_1_idle_1.png'+CB,'assets/buildings/building_1_idle_2.png'+CB,1],
       ['assets/buildings/building_2_idle_1.png'+CB,'assets/buildings/building_2_idle_2.png'+CB,2],
@@ -1323,23 +1322,53 @@ setEggs();
     requestAnimationFrame(loop);
   }
 
+function assetsCruciauxOk(){
+  // Il faut au minimum : 1 frame idle de Myo + le ground (devant).
+  const okMyo    = !!(images.myoIdle && images.myoIdle[0]);
+  const okGround = !!images.front;
+  return okMyo && okGround;
+}
+
+  
 /* ========== Boot ========== */
 function boot(){
-startBtn.disabled = true;
-// Affiche l'animation "loading" (en bas à droite)
-gateUI.showLoading();
+  startBtn.disabled = true;
+  gateUI.showLoading();
+
   if(!ensureCanvas()){
-    // canvas pas prêt → ne pas bloquer le bouton
     startBtn.disabled = false;
-    startBtn.textContent = 'Start';
     return;
   }
+
   loadAll().then(function(){
+    // ⚠️ Ne pas fermer l’écran titre si les visuels minimum ne sont pas là.
+    if (!assetsCruciauxOk()){
+      // On ré-affiche START, on explique, et on ne lance pas la boucle.
+      gateUI.showStart();
+      startBtn.disabled = false;
+
+      // Petit message discret en bas pour t’indiquer ce qui manque
+      const note = document.getElementById('loadNote') || document.createElement('div');
+      note.id = 'loadNote';
+      Object.assign(note.style, {
+        position:'absolute', bottom:'12px', left:'12px', right:'12px',
+        font:'12px/1.4 system-ui', color:'#bbb', opacity:'0.9'
+      });
+      const miss = [
+        !(images.myoIdle && images.myoIdle[0]) ? 'images.myoIdle[0]' : null,
+        !images.front ? 'images.front (ground.png)' : null
+      ].filter(Boolean).join(', ');
+      note.textContent = 'Chargement incomplet. Manque: ' + miss;
+      gate.appendChild(note);
+      return;
+    }
+
     gate.style.display = 'none';
     gateUI.stopAll();
     requestAnimationFrame(loop);
   });
 }
+
 
 function tryStart(){ startAudio(); boot(); }
 
