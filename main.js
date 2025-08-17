@@ -199,7 +199,11 @@ try{
   }
 
   /* ========== Assets ========== */
-  const CB='?v='+(Date.now());
+  // IMPORTANT : n'ajouter ?v=... que si la page est servie en http(s).
+// En file:// ça peut casser le chargement des images → écran noir.
+const IS_HTTP = location.protocol === 'http:' || location.protocol === 'https:';
+const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
+
   const ASSETS={
     back :'assets/background/bg_far.png'+CB,
     mid  :'assets/background/bg_mid.png'+CB,
@@ -843,6 +847,7 @@ function buildWorld(){
 
   /* ========== Draw helpers ========== */
   function drawLayer(img,f,den,yOff=0){
+    if(!img || !img.width) return;
     const W=canvas.width/DPR, H=canvas.height/DPR;
     const s=(den*W)/img.width, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
     const y=(H-dh)+yOff;
@@ -854,7 +859,9 @@ function drawMyo(runVel,yOff,H=MYO_H){
   const frames=(Math.abs(runVel)>1e-2?images.myoWalk:images.myoIdle);
   const fps=(Math.abs(runVel)>1e-2?8:4);
   const idx=frames.length>1?Math.floor(player.animTime*fps)%frames.length:0;
-  const img=frames[idx]||images.myoIdle[0]; if(!img) return;
+  const img=frames[idx]||images.myoIdle[0];
+  if(!img || !img.width) return;  // garde-fou anti-écran noir
+
 
   const s=H/img.height, dw=Math.round(img.width*s), dh=Math.round(img.height*s);
   const footPad=Math.round(dh*FOOT_PAD_RATIO);
