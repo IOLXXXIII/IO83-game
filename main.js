@@ -57,6 +57,15 @@ function ensureCanvas(){
   /* ========== Gate / HUD ========== */
   const gate = document.getElementById('gate');
   const startBtn = document.getElementById('startBtn');
+  if (gate) gate.style.position = gate.style.position || 'relative';
+if (startBtn){
+  Object.assign(startBtn.style, {
+    position:'absolute', inset:'0',      // couvre tout le gate
+    opacity:'0', cursor:'pointer',       // invisible mais cliquable
+    background:'transparent', border:'0'
+  });
+}
+
   const hud = document.getElementById('hud');
 
   let postersCount = 0, eggs = 0;          // ← UNE SEULE FOIS
@@ -79,16 +88,16 @@ function ensureCanvas(){
     return e;
   })();
 
-// ——— Gate UI (start + loading) ———
-const gateUI = (() => {
-  if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
-
   // Création des <img>
   const startImg   = document.createElement('img');
   const loadingImg = document.createElement('img');
 
   startImg.id = 'startImg';
   loadingImg.id = 'loadingImg';
+
+// ——— Gate UI (start + loading) ———
+const gateUI = (() => {
+  if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
   // Styles : START centré vers le bas (360×360), LOADING en bas à droite (200×81)
   Object.assign(startImg.style, {
@@ -289,7 +298,7 @@ try{
     interiorOpens:Array.from({length:10},(_,i)=>`assets/interiors/interior_open_${i+1}.png${CB}`),
     postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
     allCompletePNG:'assets/collectibles/all_complete.png'+CB,
-    absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB
+    absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB,
     uiStart: ['assets/ui/start/start_idle_1.png'+CB, 'assets/ui/start/start_idle_2.png'+CB],
     uiLoading: Array.from({length:5}, (_,i)=>`assets/ui/loading/loading_idle_${i+1}.png${CB}`),
 
@@ -304,7 +313,7 @@ const images = {
   dialogs:{aeron:[], kaito:[], maonis:[], kahikoans:[]},
   buildings:[], buildingKaito:null, buildingWall:null, dashTrail:[],
   interiorClosedIdle:[], interiorOpens:[],
-  postersComplete:null, allComplete:null, absoluteComplete:null, jumpDust:[]
+  postersComplete:null, allComplete:null, absoluteComplete:null, jumpDust:[],
   ui:{ start:[], loading:[] }  
 };
 
