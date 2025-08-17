@@ -269,7 +269,6 @@ const gateUI = (() => {
   loadingImg.src = (ASSETS.uiLoading && ASSETS.uiLoading[0]) || '';
 
   // Ajout au gate
-  gate.style.position = gate.style.position || 'relative';
   gate.appendChild(startImg);
   gate.appendChild(loadingImg);
 
