@@ -58,6 +58,68 @@ function ensureCanvas(){
   const gate = document.getElementById('gate');
   const startBtn = document.getElementById('startBtn');
 
+  // ====== START HANDLERS (définis en premier, dispo pour toute UI) ======
+let started = false;
+
+function tryStart(){ startAudio(); boot(); }
+
+function onStart(e){
+  if (started) return;
+  started = true;
+  if (e) e.preventDefault();
+  cleanup();
+  try {
+    tryStart();
+  } catch(err){
+    console.error('[IO83] start error:', err);
+    // on permet un 2e essai si une erreur s'est produite avant boot
+    started = false;
+  }
+}
+
+function onStartKey(e){
+  if (e.key === 'Enter' || e.key === ' ') onStart(e);
+}
+
+function cleanup(){
+  if (startBtn){
+    startBtn.onclick = null;
+    startBtn.removeEventListener('click', onStart);
+    startBtn.removeEventListener('pointerdown', onStart);
+  }
+  if (gate){
+    gate.onclick = null;
+    gate.removeEventListener('click', onStart);
+    gate.removeEventListener('pointerdown', onStart);
+    gate.removeEventListener('keydown', onStartKey);
+  }
+  window.removeEventListener('pointerdown', onStart, true);
+  window.removeEventListener('click', onStart, true);
+  window.removeEventListener('keydown', onStartKey, true);
+}
+
+// — Branches primaire + ceintures et bretelles —
+if (gate){
+  gate.style.cursor = 'pointer';
+  gate.setAttribute('role','button');
+  gate.setAttribute('tabindex','0');
+
+  // DOM0 + DOM2 (clic sur le gate ou ses enfants)
+  gate.onclick = onStart;
+  gate.addEventListener('click', onStart, {passive:false});
+  gate.addEventListener('pointerdown', onStart, {passive:false});
+  gate.addEventListener('keydown', onStartKey, {passive:false});
+}
+
+// fallback global : premier input démarre quoi qu'il arrive (même si un calque recouvre)
+window.addEventListener('pointerdown', onStart, {passive:false, capture:true});
+window.addEventListener('click',       onStart, {passive:false, capture:true});
+window.addEventListener('keydown',  onStartKey, {passive:false, capture:true});
+
+// exposé global de secours (au cas où tu veux tester depuis la console)
+window.__IO83_START__ = onStart;
+
+
   
 // Laisse le bouton visible (stylé par le CSS)
 if (startBtn){
@@ -241,6 +303,17 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 
   };
 
+// Fallback immédiat : si pour une raison X le sprite est caché, on montre le bouton
+if (startBtn && getComputedStyle(startImg).display === 'none'){
+  try{ startBtn.style.setProperty('display','block'); }catch(_){}
+}
+// et on câble aussi le bouton
+if (startBtn){
+  startBtn.onclick = onStart;
+  startBtn.addEventListener('click', onStart, {passive:false});
+  startBtn.addEventListener('pointerdown', onStart, {passive:false});
+}
+
   
 // ——— Gate UI (START sprite + LOADING) ———
 const gateUI = (() => {
@@ -263,6 +336,14 @@ const gateUI = (() => {
     zIndex:'9'
   });
   startImg.src = (ASSETS.uiStart && ASSETS.uiStart[0]) || '';
+
+  // si l'image START ne charge pas → on révèle le bouton HTML
+startImg.onerror = ()=> {
+  if (startBtn) {
+    try{ startBtn.style.setProperty('display','block'); }catch(_){}
+  }
+};
+
 
   // Sprite LOADING (bas droite)
   const loadingImg = document.createElement('img');
