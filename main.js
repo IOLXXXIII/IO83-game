@@ -346,49 +346,71 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 
   
 // ——— Gate UI (START sprite + LOADING) ———
+// Version robuste : animation via requestAnimationFrame + filet de sécurité de clic
 const gateUI = (() => {
   if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
-  // RÉFÉRENCES AUX ÉLÉMENTS DÉJÀ DANS LE HTML
+  // Références DOM déjà présentes dans index.html
   const startImg   = document.getElementById('startImg');
   const loadingImg = document.getElementById('loadingImg');
 
-  // Sécurités si assets manquent : on garde le bouton de secours caché,
-  // mais "startImg" reste cliquable si présent.
+  // 1) Filets de démarrage : onStart sur le sprite + sur le gate
   if (startImg) {
     startImg.addEventListener('click', onStart, {passive:false});
     startImg.addEventListener('pointerdown', onStart, {passive:false});
   }
-  if (startBtn) {
-    startBtn.onclick = onStart;
-    startBtn.addEventListener('click', onStart, {passive:false});
-    startBtn.addEventListener('pointerdown', onStart, {passive:false});
+  if (gate) {
+    gate.addEventListener('click', onStart, {passive:false});       // cliquer n’importe où
+    gate.addEventListener('pointerdown', onStart, {passive:false});
+    gate.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') onStart(e);
+    }, {passive:false});
   }
 
-  // Petit moteur d’animation (swap de src à fps fixe)
+  // 2) Petit moteur d’anim par rAF (plus fiable que setInterval)
   function makeAnimator(el, frames, fps){
-    let i=0, id=null;
-    function tick(){ if(!frames || frames.length<=1) return; i=(i+1)%frames.length; el.src = frames[i]; }
+    let i=0, running=false, last=0, acc=0;
+    const minFrames = Array.isArray(frames) ? frames.filter(Boolean) : [];
+    function loop(ts){
+      if (!running) return;
+      if (!last) last = ts;
+      acc += ts - last;
+      last = ts;
+      const step = 1000 / Math.max(1, fps);
+      while (acc >= step) {
+        acc -= step;
+        i = (i + 1) % minFrames.length;
+        el.src = minFrames[i];
+      }
+      requestAnimationFrame(loop);
+    }
     return {
-      start(){ if(!el || !frames || frames.length<=1 || id) return;
-               id=setInterval(tick, Math.max(60, Math.floor(1000/fps))); },
-      stop(){ if(id){ clearInterval(id); id=null; } },
-      setVisible(v){ if(el) el.style.display = v?'block':'none'; }
+      start(){
+        if (!el || minFrames.length < 2 || running) return;
+        running = true; last = 0; acc = 0; i = 0;
+        // s’assure que la première frame est bien posée
+        el.src = minFrames[0];
+        requestAnimationFrame(loop);
+      },
+      stop(){ running = false; },
+      setVisible(v){ if (el) el.style.display = v ? 'block' : 'none'; }
     };
   }
 
-  // Tableaux de frames (déjà construits dans ASSETS)
-  const startFrames   = ASSETS.uiStart   || [];
-  const loadingFrames = ASSETS.uiLoading || [];
+  // Tableaux de frames (sans attendre le chargement d’images)
+  const startFrames   = (ASSETS && ASSETS.uiStart)   ? ASSETS.uiStart   : [];
+  const loadingFrames = (ASSETS && ASSETS.uiLoading) ? ASSETS.uiLoading : [];
 
-  // Animations
+  // Animations (4 fps = clignote doucement)
   const startAnim   = makeAnimator(startImg,   startFrames,   4);
   const loadingAnim = makeAnimator(loadingImg, loadingFrames, 4);
 
-  // État initial
-  startAnim.setVisible(true);  startAnim.start();
-  loadingAnim.setVisible(false); loadingAnim.stop();
+  // État initial visible = START (cliquable)
+  startAnim.setVisible(true);
+  loadingAnim.setVisible(false);
+  startAnim.start();
 
+  // 3) Expose API
   return {
     showStart(){
       startAnim.setVisible(true);   startAnim.start();
@@ -404,6 +426,13 @@ const gateUI = (() => {
     }
   };
 })();
+
+// ——— Filet ultime : si, pour une raison quelconque, rien ne s’est armé,
+// on force un démarrage au premier clic document (une seule fois) ———
+document.addEventListener('click', (e)=>{
+  if (typeof onStart === 'function') onStart(e);
+}, { once:true, capture:true, passive:false });
+
 
   
 const images = {
