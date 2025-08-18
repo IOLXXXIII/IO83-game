@@ -924,6 +924,48 @@ function drawMyo(runVel,yOff,H=MYO_H){
       ctx.drawImage(frame,sx,b.y+yOff,b.dw,b.dh);
     }
   }
+
+  // Fallback visuel si aucune image de bulle n’est chargée
+function drawSpeechBubble(xCenter, yBottom){
+  const w=160, h=80, r=8;
+  const x = Math.round(xCenter - w/2);
+  const y = Math.round(yBottom - h - 18);
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle   = 'rgba(255,255,255,0.95)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+  ctx.lineWidth   = 2;
+
+  // corps arrondi
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y, x+w,y+h, r);
+  ctx.arcTo(x+w,y+h, x,y+h, r);
+  ctx.arcTo(x,y+h, x,y, r);
+  ctx.arcTo(x,y, x+w,y, r);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // pointe
+  ctx.beginPath();
+  ctx.moveTo(xCenter-6, y+h);
+  ctx.lineTo(xCenter+6, y+h);
+  ctx.lineTo(xCenter,   y+h+12);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // "…" minimal
+  ctx.fillStyle = '#222';
+  const dy = y + h/2 - 3;
+  ctx.beginPath();
+  ctx.arc(xCenter-14, dy, 3, 0, Math.PI*2);
+  ctx.arc(xCenter,     dy, 3, 0, Math.PI*2);
+  ctx.arc(xCenter+14, dy, 3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+  
   function drawNPCs(yOff){
     for(const n of npcs){
       const base=n.frames[0]; if(!base) continue;
@@ -949,14 +991,15 @@ if(n.show){
   n.dialogImg = null;
 }
 
-      if(n.dialogImg){
-        const scale=0.72, bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
-        const bx=sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5);
-        const by=sy - Math.round(bh*0.5);
-        ctx.drawImage(n.dialogImg,bx,by,bw,bh);
-      }
-      n.animT+=1/60;
-    }
+if(n.dialogImg){
+  const scale=0.72, bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
+  const bx=sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5);
+  const by=sy - Math.round(bh*0.5);
+  ctx.drawImage(n.dialogImg,bx,by,bw,bh);
+} else if (n.show){
+  // Fallback si aucune image de bulle n’est dispo
+  drawSpeechBubble(sx + Math.round(dw/2), sy);
+}
   }
   function drawPosters(yOff){
     for(const p of posters){
