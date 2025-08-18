@@ -372,7 +372,7 @@ const gateUI = (() => {
         loadingImg.src = arr[loadingIdx % arr.length].src || loadingImg.src;
       }
       loadingIdx++;
-    }, 140); // ~7 fps
+    }, 280); // ~7 fps
   }
   function stopLoadingAnim(){
     if (loadingTimer){ clearInterval(loadingTimer); loadingTimer = null; }
