@@ -111,7 +111,13 @@ function onStart(e){
 
 
 // Clavier (Enter / Espace)
-function onStartKey(e){ if (e.key === 'Enter' || e.key === ' ') onStart(e); }
+function onStartKey(e){
+  const k = e.key;
+  if (k === 'Enter' || k === ' ' || k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown'){
+    onStart(e);
+  }
+}
+
 
 // Supprime tous les listeners « hard start »
 function cleanup(){
@@ -149,11 +155,12 @@ function armHardStart(){
     gate.addEventListener('keydown', onStartKey, {passive:false});
   }
 
-  // **N’importe quelle action** démarre : clics, touches, wheel, tap, gamepad…
-  const opts = { capture:true, passive:false };
-  ['pointerdown','pointerup','click','mousedown','mouseup','touchstart','touchend','keydown','keyup','wheel','contextmenu']
-    .forEach(ev => window.addEventListener(ev, onStart, opts));
-  window.addEventListener('gamepadconnected', onStart, opts);
+// Seulement : clic/tap et touches utiles (flèches, espace, Entrée)
+const opts = { capture:true, passive:false };
+['click','pointerdown','touchstart','keydown'].forEach(ev => window.addEventListener(ev, onStart, opts));
+window.removeEventListener('wheel', onStart, opts);       // sécurité si existait
+window.removeEventListener('contextmenu', onStart, opts); // sécurité si existait
+
 
   // Le bouton HTML (s’il est dévoilé) démarre aussi
   if (startBtn){
@@ -161,9 +168,6 @@ function armHardStart(){
     startBtn.addEventListener('click', onStart, {passive:false});
     startBtn.addEventListener('pointerdown', onStart, {passive:false});
   }
-
-  // **Filet ultime** : auto-start après 2s (audio se démutera à la prochaine action)
-  setTimeout(()=>{ if(!started) onStart(); }, 2000);
 
   // Exposé console (secours manuel)
   window.__IO83_START__ = onStart;
@@ -349,15 +353,32 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 
   
 // ——— Gate UI (START sprite + LOADING) ———
-// Version simplifiée : START animé par CSS, on ne fait qu’afficher/masquer.
 const gateUI = (() => {
   if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
-  // Références DOM (nouveau conteneur START + LOADING existant)
-  const startWrap  = document.getElementById('startSprite');   // <div> avec 2 <img> superposées
-  const loadingImg = document.getElementById('loadingImg');    // une seule image (5 frames côté assets)
+  const startWrap  = document.getElementById('startSprite');
+  const loadingImg = document.getElementById('loadingImg');
 
-  // Filets de démarrage clairs
+  // Animation LOADING (fait défiler loading_idle_1..5)
+  let loadingTimer = null;
+  let loadingIdx = 0;
+  function startLoadingAnim(){
+    if (!loadingImg) return;
+    stopLoadingAnim();
+    loadingIdx = 0;
+    loadingTimer = setInterval(()=>{
+      const arr = images.ui && images.ui.loading ? images.ui.loading : null;
+      if (arr && arr.length){
+        loadingImg.src = arr[loadingIdx % arr.length].src || loadingImg.src;
+      }
+      loadingIdx++;
+    }, 140); // ~7 fps
+  }
+  function stopLoadingAnim(){
+    if (loadingTimer){ clearInterval(loadingTimer); loadingTimer = null; }
+  }
+
+  // Entrées utilisateur
   if (startWrap) {
     startWrap.addEventListener('click', onStart, {passive:false});
     startWrap.addEventListener('pointerdown', onStart, {passive:false});
@@ -366,37 +387,32 @@ const gateUI = (() => {
     gate.addEventListener('click', onStart, {passive:false});
     gate.addEventListener('pointerdown', onStart, {passive:false});
     gate.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') onStart(e);
+      if (e.key === 'Enter' || e.key === ' ' || e.key.startsWith('Arrow')) onStart(e);
     }, {passive:false});
   }
 
-  // Afficher/Masquer
   function showStart(){
     if (startWrap)  startWrap.style.display = 'block';
     if (loadingImg) loadingImg.style.display = 'none';
+    stopLoadingAnim();
   }
   function showLoading(){
     if (startWrap)  startWrap.style.display = 'none';
     if (loadingImg) loadingImg.style.display = 'block';
+    startLoadingAnim();
   }
   function stopAll(){
     if (startWrap)  startWrap.style.display = 'none';
     if (loadingImg) loadingImg.style.display = 'none';
+    stopLoadingAnim();
   }
 
-  // État initial : START visible
+  // État initial
   showStart();
 
   return { showStart, showLoading, stopAll };
 })();
 
-  
-
-// ——— Filet ultime : si, pour une raison quelconque, rien ne s’est armé,
-// on force un démarrage au premier clic document (une seule fois) ———
-document.addEventListener('click', (e)=>{
-  if (typeof onStart === 'function') onStart(e);
-}, { once:true, capture:true, passive:false });
 
 
   
