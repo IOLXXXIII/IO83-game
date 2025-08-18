@@ -349,101 +349,54 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 const gateUI = (() => {
   if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
-  // Sprite START (ton start_idle)
-  const startImg = document.createElement('img');
-  startImg.id = 'startImg';
-  Object.assign(startImg.style, {
-    position:'absolute',
-    left:'50%',
-    bottom:'8%',
-    transform:'translateX(-50%) scale(0.30)', // 70% plus petit
-    transformOrigin:'50% 100%',
-    width:'360px', height:'360px',
-    imageRendering:'pixelated',
-    pointerEvents:'auto',
-    cursor:'pointer',
-    userSelect:'none',
-    zIndex:'9'
-  });
+  // RÉFÉRENCES AUX ÉLÉMENTS DÉJÀ DANS LE HTML
+  const startImg   = document.getElementById('startImg');
+  const loadingImg = document.getElementById('loadingImg');
 
-  // >>> IMPORTANT : brancher les handlers AVANT .src (évite la course onerror)
-  function revealHtmlButton(){
-    if (startBtn) startBtn.style.display = 'block';
+  // Sécurités si assets manquent : on garde le bouton de secours caché,
+  // mais "startImg" reste cliquable si présent.
+  if (startImg) {
+    startImg.addEventListener('click', onStart, {passive:false});
+    startImg.addEventListener('pointerdown', onStart, {passive:false});
   }
-  startImg.addEventListener('error', revealHtmlButton, { once:true });
-  startImg.addEventListener('load',  ()=>{/* rien, on garde le bouton caché */}, { once:true });
-
-  // Assigner la source APRÈS les handlers
-  startImg.src = (ASSETS.uiStart && ASSETS.uiStart[0]) || '';
-
-  // Sécurité : si l'image a déjà échoué avant l'attachement → fallback
-  if (startImg.complete && startImg.naturalWidth === 0) revealHtmlButton();
-
-  // Sprite LOADING (bas droite)
-  const loadingImg = document.createElement('img');
-  loadingImg.id = 'loadingImg';
-  Object.assign(loadingImg.style, {
-    position:'absolute', right:'24px', bottom:'24px',
-    width:'200px', height:'81px',
-    imageRendering:'pixelated',
-    pointerEvents:'none',
-    userSelect:'none',
-    display:'none',
-    zIndex:'10'
-  });
-  // (Pas critique, mais on garde le même ordre "handlers puis .src")
-  loadingImg.addEventListener('error', ()=>{}, { once:true });
-  loadingImg.src = (ASSETS.uiLoading && ASSETS.uiLoading[0]) || '';
-
-  gate.appendChild(startImg);
-  gate.appendChild(loadingImg);
-
-  // Toujours câbler le bouton HTML (même s'il est caché au départ)
   if (startBtn) {
     startBtn.onclick = onStart;
     startBtn.addEventListener('click', onStart, {passive:false});
     startBtn.addEventListener('pointerdown', onStart, {passive:false});
   }
 
-  // Sécurité #2 : si au bout de 300 ms le sprite n'est pas OK, on révèle le bouton
-  setTimeout(()=>{
-    if (!started && (startImg.naturalWidth === 0 || getComputedStyle(startImg).display === 'none')) {
-      revealHtmlButton();
-    }
-  }, 300);
-
-  // Petit moteur d’animation (alterne les frames à fps fixe)
+  // Petit moteur d’animation (swap de src à fps fixe)
   function makeAnimator(el, frames, fps){
     let i=0, id=null;
-    function tick(){ i=(i+1)%frames.length; el.src = frames[i]; }
+    function tick(){ if(!frames || frames.length<=1) return; i=(i+1)%frames.length; el.src = frames[i]; }
     return {
-      start(){ if(!frames || frames.length<=1 || id) return;
+      start(){ if(!el || !frames || frames.length<=1 || id) return;
                id=setInterval(tick, Math.max(60, Math.floor(1000/fps))); },
       stop(){ if(id){ clearInterval(id); id=null; } },
-      setVisible(v){ el.style.display = v?'block':'none'; }
+      setVisible(v){ if(el) el.style.display = v?'block':'none'; }
     };
   }
 
-  // Animations
-  const startAnim   = makeAnimator(startImg,   ASSETS.uiStart   || [], 4); // idle doux
-  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 4); // ~4 fps
+  // Tableaux de frames (déjà construits dans ASSETS)
+  const startFrames   = ASSETS.uiStart   || [];
+  const loadingFrames = ASSETS.uiLoading || [];
 
-  // État initial : START visible, LOADING caché
+  // Animations
+  const startAnim   = makeAnimator(startImg,   startFrames,   4);
+  const loadingAnim = makeAnimator(loadingImg, loadingFrames, 4);
+
+  // État initial
   startAnim.setVisible(true);  startAnim.start();
   loadingAnim.setVisible(false); loadingAnim.stop();
 
-  // Le sprite START est cliquable (comme le fond)
-  startImg.addEventListener('click', onStart, {passive:false});
-  startImg.addEventListener('pointerdown', onStart, {passive:false});
-
   return {
     showStart(){
-      startAnim.setVisible(true);  startAnim.start();
+      startAnim.setVisible(true);   startAnim.start();
       loadingAnim.setVisible(false); loadingAnim.stop();
     },
     showLoading(){
-      startAnim.setVisible(false);  startAnim.stop();
-      loadingAnim.setVisible(true); loadingAnim.start();
+      startAnim.setVisible(false);   startAnim.stop();
+      loadingAnim.setVisible(true);  loadingAnim.start();
     },
     stopAll(){
       startAnim.stop(); loadingAnim.stop();
@@ -451,7 +404,6 @@ const gateUI = (() => {
     }
   };
 })();
-
 
   
 const images = {
