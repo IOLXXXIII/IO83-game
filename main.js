@@ -1429,10 +1429,21 @@ if(!ensureCanvas()){
 function tryStart(){ startAudio(); boot(); }
 
 // --- Handlers
+let started = false;
+
 function onStart(e){
+  if (started) return;
+  started = true;
   if (e) e.preventDefault();
   cleanup();
   tryStart();
+}
+
+function onStartKey(e){
+  // Entrée ou Espace démarrent aussi
+  if (e.key === 'Enter' || e.key === ' ') {
+    onStart(e);
+  }
 }
 
 function cleanup(){
@@ -1444,6 +1455,9 @@ function cleanup(){
     gate.removeEventListener('click', onStart);
     gate.removeEventListener('pointerdown', onStart);
   }
+  // retire les fallback globaux
+  window.removeEventListener('pointerdown', onStart, true);
+  window.removeEventListener('keydown', onStartKey, true);
 }
 
 // Attache les listeners (1 seule fois au chargement)
@@ -1454,10 +1468,15 @@ if (startBtn){
 if (gate){
   gate.addEventListener('click', onStart, {passive:false});
   gate.addEventListener('pointerdown', onStart, {passive:false});
-  gate.style.cursor = 'pointer'; // feedback visuel
+  gate.style.cursor = 'pointer';
 }
 
+// --- Fallback global ultra-robuste : démarre au 1er input, même si le clic tombe sur <canvas>
+window.addEventListener('pointerdown', onStart, {passive:false, capture:true});
+window.addEventListener('keydown', onStartKey, {passive:false, capture:true});
+
 console.log('[IO83] main.js chargé ✔');
+
 
  // --- FIN DU FICHIER ---
 })();
