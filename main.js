@@ -1090,6 +1090,8 @@ if(n.dialogImg){
   drawSpeechBubble(sx + Math.round(dw/2), sy);
 }
   }
+}
+  
   function drawPosters(yOff){
     for(const p of posters){
       const sx=p.x - cameraX; if(sx<-1400 || sx>canvas.width/DPR+1400) continue;
