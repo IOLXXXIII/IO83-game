@@ -52,7 +52,7 @@ html,body{
 #startSprite{
   position:absolute;
   left:50%;
-  bottom:clamp(4px, 2.25vh, 28px);  /* ← plus bas qu’avant */
+  bottom:clamp(12px, 1.25vh, 24px); /* nettement plus bas, stable */
   transform:translateX(-50%) scale(0.30);
   transform-origin:50% 100%;
   width:360px; height:360px;
@@ -61,6 +61,7 @@ html,body{
   user-select:none;
   z-index:9;
 }
+
 #startSprite img{
   position:absolute; inset:0; width:100%; height:100%;
   image-rendering:pixelated; pointer-events:none;
