@@ -91,8 +91,9 @@ function onStart(e){
   
 
   // >>> IMPORTANT : garder l’écran titre visible et afficher ton LOADING tout de suite
-  gateUI.showLoading();     // bascule ton sprite loading_idle_1..5 (bas droite)
+  if (window.gateUI && window.gateUI.showLoading) window.gateUI.showLoading();
   cleanup();                // on débranche les listeners "start"
+
 
   try {
     ensureCanvas();         // on prépare le canvas (sans démarrer la boucle)
@@ -353,7 +354,7 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 
   
 // ——— Gate UI (START sprite + LOADING) ———
-const gateUI = (() => {
+window.gateUI = (() => {
   if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
   const startWrap  = document.getElementById('startSprite');
@@ -1501,7 +1502,7 @@ function assetsCruciauxOk(){
 /* ========== Boot ========== */
 function boot(){
   if (startBtn) startBtn.disabled = true;
-  gateUI.showLoading();
+  if (window.gateUI && window.gateUI.showLoading) window.gateUI.showLoading();
 
 if(!ensureCanvas()){
   if (startBtn) startBtn.disabled = false;
@@ -1528,7 +1529,7 @@ if(!ensureCanvas()){
     }
 
     gate.style.display = 'none';
-    gateUI.stopAll();
+    if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
     requestAnimationFrame(loop);
   });
 
