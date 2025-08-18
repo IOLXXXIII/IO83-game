@@ -303,17 +303,6 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 
   };
 
-// Fallback immédiat : si pour une raison X le sprite est caché, on montre le bouton
-if (startBtn && getComputedStyle(startImg).display === 'none'){
-  try{ startBtn.style.setProperty('display','block'); }catch(_){}
-}
-// et on câble aussi le bouton
-if (startBtn){
-  startBtn.onclick = onStart;
-  startBtn.addEventListener('click', onStart, {passive:false});
-  startBtn.addEventListener('pointerdown', onStart, {passive:false});
-}
-
   
 // ——— Gate UI (START sprite + LOADING) ———
 const gateUI = (() => {
@@ -362,6 +351,18 @@ startImg.onerror = ()=> {
   gate.appendChild(startImg);
   gate.appendChild(loadingImg);
 
+// Si pour une raison X le sprite START n’apparaît pas, on révèle le bouton HTML
+try {
+  const hidden = getComputedStyle(startImg).display === 'none';
+  if (startBtn && hidden) startBtn.style.display = 'block';
+  if (startBtn) {
+    startBtn.onclick = onStart;
+    startBtn.addEventListener('click', onStart, {passive:false});
+    startBtn.addEventListener('pointerdown', onStart, {passive:false});
+  }
+} catch(_) {}
+
+  
   // Petit moteur d’animation (alterne les frames à fps fixe)
   function makeAnimator(el, frames, fps){
     let i=0, id=null;
@@ -1505,56 +1506,6 @@ if(!ensureCanvas()){
   });
 
 }
-
-
-function tryStart(){ startAudio(); boot(); }
-
-// --- Handlers
-let started = false;
-
-function onStart(e){
-  if (started) return;
-  started = true;
-  if (e) e.preventDefault();
-  cleanup();
-  tryStart();
-}
-
-function onStartKey(e){
-  // Entrée ou Espace démarrent aussi
-  if (e.key === 'Enter' || e.key === ' ') {
-    onStart(e);
-  }
-}
-
-function cleanup(){
-  if (startBtn){
-    startBtn.removeEventListener('click', onStart);
-    startBtn.removeEventListener('pointerdown', onStart);
-  }
-  if (gate){
-    gate.removeEventListener('click', onStart);
-    gate.removeEventListener('pointerdown', onStart);
-  }
-  // retire les fallback globaux
-  window.removeEventListener('pointerdown', onStart, true);
-  window.removeEventListener('keydown', onStartKey, true);
-}
-
-// Attache les listeners (1 seule fois au chargement)
-if (startBtn){
-  startBtn.addEventListener('click', onStart, {passive:false});
-  startBtn.addEventListener('pointerdown', onStart, {passive:false});
-}
-if (gate){
-  gate.addEventListener('click', onStart, {passive:false});
-  gate.addEventListener('pointerdown', onStart, {passive:false});
-  gate.style.cursor = 'pointer';
-}
-
-// --- Fallback global ultra-robuste : démarre au 1er input, même si le clic tombe sur <canvas>
-window.addEventListener('pointerdown', onStart, {passive:false, capture:true});
-window.addEventListener('keydown', onStartKey, {passive:false, capture:true});
 
 console.log('[IO83] main.js chargé ✔');
 
