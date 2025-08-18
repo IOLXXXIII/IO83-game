@@ -41,11 +41,12 @@ html,body{
   image-rendering:pixelated;
 }
 
-/* Le titre ne doit pas capturer la souris */
+/* Le titre peut capter les clics et le gate recevra l’événement en bubble */
 #gate .title,
 #gate .title img {
-  pointer-events: none;
+  pointer-events: auto;
 }
+
 
 
 /* Animation 2 frames du titre */
