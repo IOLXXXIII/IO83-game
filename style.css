@@ -71,3 +71,7 @@ html,body{
 #gate button:disabled{ opacity:.6; cursor:default }
 
 html, body, #game { touch-action: none; }
+
+/* Masquer totalement le bouton HTML - on clique sur le sprite animé à la place */
+#startBtn{ display:none !important; }
+
