@@ -346,86 +346,48 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 
   
 // ——— Gate UI (START sprite + LOADING) ———
-// Version robuste : animation via requestAnimationFrame + filet de sécurité de clic
+// Version simplifiée : START animé par CSS, on ne fait qu’afficher/masquer.
 const gateUI = (() => {
   if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
-  // Références DOM déjà présentes dans index.html
-  const startImg   = document.getElementById('startImg');
-  const loadingImg = document.getElementById('loadingImg');
+  // Références DOM (nouveau conteneur START + LOADING existant)
+  const startWrap  = document.getElementById('startSprite');   // <div> avec 2 <img> superposées
+  const loadingImg = document.getElementById('loadingImg');    // une seule image (5 frames côté assets)
 
-  // 1) Filets de démarrage : onStart sur le sprite + sur le gate
-  if (startImg) {
-    startImg.addEventListener('click', onStart, {passive:false});
-    startImg.addEventListener('pointerdown', onStart, {passive:false});
+  // Filets de démarrage clairs
+  if (startWrap) {
+    startWrap.addEventListener('click', onStart, {passive:false});
+    startWrap.addEventListener('pointerdown', onStart, {passive:false});
   }
   if (gate) {
-    gate.addEventListener('click', onStart, {passive:false});       // cliquer n’importe où
+    gate.addEventListener('click', onStart, {passive:false});
     gate.addEventListener('pointerdown', onStart, {passive:false});
     gate.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') onStart(e);
     }, {passive:false});
   }
 
-  // 2) Petit moteur d’anim par rAF (plus fiable que setInterval)
-  function makeAnimator(el, frames, fps){
-    let i=0, running=false, last=0, acc=0;
-    const minFrames = Array.isArray(frames) ? frames.filter(Boolean) : [];
-    function loop(ts){
-      if (!running) return;
-      if (!last) last = ts;
-      acc += ts - last;
-      last = ts;
-      const step = 1000 / Math.max(1, fps);
-      while (acc >= step) {
-        acc -= step;
-        i = (i + 1) % minFrames.length;
-        el.src = minFrames[i];
-      }
-      requestAnimationFrame(loop);
-    }
-    return {
-      start(){
-        if (!el || minFrames.length < 2 || running) return;
-        running = true; last = 0; acc = 0; i = 0;
-        // s’assure que la première frame est bien posée
-        el.src = minFrames[0];
-        requestAnimationFrame(loop);
-      },
-      stop(){ running = false; },
-      setVisible(v){ if (el) el.style.display = v ? 'block' : 'none'; }
-    };
+  // Afficher/Masquer
+  function showStart(){
+    if (startWrap)  startWrap.style.display = 'block';
+    if (loadingImg) loadingImg.style.display = 'none';
+  }
+  function showLoading(){
+    if (startWrap)  startWrap.style.display = 'none';
+    if (loadingImg) loadingImg.style.display = 'block';
+  }
+  function stopAll(){
+    if (startWrap)  startWrap.style.display = 'none';
+    if (loadingImg) loadingImg.style.display = 'none';
   }
 
-  // Tableaux de frames (sans attendre le chargement d’images)
-  const startFrames   = (ASSETS && ASSETS.uiStart)   ? ASSETS.uiStart   : [];
-  const loadingFrames = (ASSETS && ASSETS.uiLoading) ? ASSETS.uiLoading : [];
+  // État initial : START visible
+  showStart();
 
-  // Animations (4 fps = clignote doucement)
-  const startAnim   = makeAnimator(startImg,   startFrames,   4);
-  const loadingAnim = makeAnimator(loadingImg, loadingFrames, 4);
-
-  // État initial visible = START (cliquable)
-  startAnim.setVisible(true);
-  loadingAnim.setVisible(false);
-  startAnim.start();
-
-  // 3) Expose API
-  return {
-    showStart(){
-      startAnim.setVisible(true);   startAnim.start();
-      loadingAnim.setVisible(false); loadingAnim.stop();
-    },
-    showLoading(){
-      startAnim.setVisible(false);   startAnim.stop();
-      loadingAnim.setVisible(true);  loadingAnim.start();
-    },
-    stopAll(){
-      startAnim.stop(); loadingAnim.stop();
-      startAnim.setVisible(false); loadingAnim.setVisible(false);
-    }
-  };
+  return { showStart, showLoading, stopAll };
 })();
+
+  
 
 // ——— Filet ultime : si, pour une raison quelconque, rien ne s’est armé,
 // on force un démarrage au premier clic document (une seule fois) ———
