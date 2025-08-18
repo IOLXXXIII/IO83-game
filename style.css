@@ -73,6 +73,11 @@ html,body{
 }
 #gate button:disabled{ opacity:.6; cursor:default }
 
+/* Met le titre derrière les sprites START / LOADING */
+#gate .title { z-index: 1; }
+#gate .title img { z-index: 1; }
+
+
 html, body, #game { touch-action: none; }
 
 /* Masquer totalement le bouton HTML - on clique sur le sprite animé à la place */
