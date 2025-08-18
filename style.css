@@ -80,6 +80,7 @@ html,body{
 
 html, body, #game { touch-action: none; }
 
-/* Masquer totalement le bouton HTML - on clique sur le sprite animé à la place */
-#startBtn{ display:none; }
+/* Bouton HTML visible en secours (toujours cliquable) */
+#startBtn{ display:block; }
+
 
