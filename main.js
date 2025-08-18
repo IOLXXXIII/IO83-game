@@ -1303,6 +1303,7 @@ for (const n of npcs){
 
 
 
+
 // Posters
 const wantsDown = keys.has('ArrowDown') || keys.has('s');
 for (const p of posters){
