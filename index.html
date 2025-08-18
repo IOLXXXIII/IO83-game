@@ -65,24 +65,32 @@
     <div id="hint">← → move · ↑ jump (×2) · ↔↔ dash · ⬇ interact</div>
   </div>
 
-  <!-- Écran titre (GATE) -->
-  <div id="gate" aria-modal="true" role="dialog"
-       onclick="window.__IO83_START__ && window.__IO83_START__(event)"
-       onkeydown="(event.key==='Enter'||event.key===' '||event.code==='Space') && window.__IO83_START__ && window.__IO83_START__(event)"
-       tabindex="0">
-    <div class="title">
-      <img id="title1" src="assets/title/title_idle_1.png" alt="IO83 title" />
-      <img id="title2" src="assets/title/title_idle_2.png" alt="" />
-    </div>
-
-    <!-- SPRITES UI DU GATE (présents dans le HTML pour éviter toute course) -->
-    <img id="startImg"   src="assets/ui/start/start_idle_1.png"   alt="" />
-    <img id="loadingImg" src="assets/ui/loading/loading_idle_1.png" alt="" />
-
-    <!-- Bouton secours (toujours masqué, utile si un asset start échoue) -->
-    <button id="startBtn" aria-label="Start game"
-            onclick="window.__IO83_START__ && window.__IO83_START__(event)">START</button>
+<!-- Écran titre (GATE) -->
+<div id="gate" aria-modal="true" role="dialog"
+     onclick="window.__IO83_START__ && window.__IO83_START__(event)"
+     onkeydown="(event.key==='Enter'||event.key===' '||event.code==='Space') && window.__IO83_START__ && window.__IO83_START__(event)"
+     tabindex="0">
+  <div class="title">
+    <img id="title1" src="assets/title/title_idle_1.png" alt="IO83 title" />
+    <img id="title2" src="assets/title/title_idle_2.png" alt="" />
   </div>
+
+  <!-- SPRITE START (style inline = anti-flash de mise en page) -->
+  <img id="startImg" src="assets/ui/start/start_idle_1.png" alt=""
+       style="position:absolute;left:50%;bottom:8%;transform:translateX(-50%) scale(0.30);transform-origin:50% 100%;
+              width:360px;height:360px;image-rendering:pixelated;cursor:pointer;user-select:none;z-index:9;"
+       onclick="window.__IO83_START__ && window.__IO83_START__(event)">
+
+  <!-- SPRITE LOADING (caché au départ, style inline = anti-flash) -->
+  <img id="loadingImg" src="assets/ui/loading/loading_idle_1.png" alt=""
+       style="position:absolute;right:24px;bottom:24px;width:200px;height:81px;image-rendering:pixelated;
+              pointer-events:none;user-select:none;display:none;z-index:10;">
+
+  <!-- Bouton secours (toujours masqué par CSS, mais opérationnel si besoin) -->
+  <button id="startBtn" aria-label="Start game"
+          onclick="window.__IO83_START__ && window.__IO83_START__(event)">START</button>
+</div>
+
 
 
   <!-- Canvas 16:9 -->
