@@ -45,22 +45,13 @@ html,body{
   pointer-events:none;
 }
 
-/* Alternance 2 frames du titre (opacité croisée) */
+/* Alternance 2 frames du titre (opacité croisée) — UNE SEULE VERSION */
 #title1{ animation:io83TitleA 1.1s steps(1) infinite; }
 #title2{ animation:io83TitleB 1.1s steps(1) infinite; }
+
 @keyframes io83TitleA { 0%,49%{opacity:1} 50%,100%{opacity:0} }
 @keyframes io83TitleB { 0%,49%{opacity:0} 50%,100%{opacity:1} }
 
-}
-
-
-/* Animation 2 frames du titre */
-#title1{ animation:titleSwapA 1.1s steps(1) infinite; }
-#title2{ animation:titleSwapB 1.1s steps(1) infinite; }
-@keyframes titleSwapA { 0%,49%{opacity:1} 50%,100%{opacity:0} }
-@keyframes titleSwapB { 0%,49%{opacity:0} 50%,100%{opacity:1} }
-
-}
 
 /* Sprite START (petit, bas-centre) */
 #startImg{
