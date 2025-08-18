@@ -324,15 +324,19 @@ const gateUI = (() => {
     userSelect:'none',
     zIndex:'9'
   });
+
+  // >>> IMPORTANT : brancher les handlers AVANT .src (évite la course onerror)
+  function revealHtmlButton(){
+    if (startBtn) startBtn.style.display = 'block';
+  }
+  startImg.addEventListener('error', revealHtmlButton, { once:true });
+  startImg.addEventListener('load',  ()=>{/* rien, on garde le bouton caché */}, { once:true });
+
+  // Assigner la source APRÈS les handlers
   startImg.src = (ASSETS.uiStart && ASSETS.uiStart[0]) || '';
 
-  // si l'image START ne charge pas → on révèle le bouton HTML
-startImg.onerror = ()=> {
-  if (startBtn) {
-    try{ startBtn.style.setProperty('display','block'); }catch(_){}
-  }
-};
-
+  // Sécurité : si l'image a déjà échoué avant l'attachement → fallback
+  if (startImg.complete && startImg.naturalWidth === 0) revealHtmlButton();
 
   // Sprite LOADING (bas droite)
   const loadingImg = document.createElement('img');
@@ -346,23 +350,27 @@ startImg.onerror = ()=> {
     display:'none',
     zIndex:'10'
   });
+  // (Pas critique, mais on garde le même ordre "handlers puis .src")
+  loadingImg.addEventListener('error', ()=>{}, { once:true });
   loadingImg.src = (ASSETS.uiLoading && ASSETS.uiLoading[0]) || '';
 
   gate.appendChild(startImg);
   gate.appendChild(loadingImg);
 
-// Si pour une raison X le sprite START n’apparaît pas, on révèle le bouton HTML
-try {
-  const hidden = getComputedStyle(startImg).display === 'none';
-  if (startBtn && hidden) startBtn.style.display = 'block';
+  // Toujours câbler le bouton HTML (même s'il est caché au départ)
   if (startBtn) {
     startBtn.onclick = onStart;
     startBtn.addEventListener('click', onStart, {passive:false});
     startBtn.addEventListener('pointerdown', onStart, {passive:false});
   }
-} catch(_) {}
 
-  
+  // Sécurité #2 : si au bout de 300 ms le sprite n'est pas OK, on révèle le bouton
+  setTimeout(()=>{
+    if (!started && (startImg.naturalWidth === 0 || getComputedStyle(startImg).display === 'none')) {
+      revealHtmlButton();
+    }
+  }, 300);
+
   // Petit moteur d’animation (alterne les frames à fps fixe)
   function makeAnimator(el, frames, fps){
     let i=0, id=null;
@@ -377,7 +385,7 @@ try {
 
   // Animations
   const startAnim   = makeAnimator(startImg,   ASSETS.uiStart   || [], 4); // idle doux
-  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 4); // 50% plus lent (8→4)
+  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 4); // ~4 fps
 
   // État initial : START visible, LOADING caché
   startAnim.setVisible(true);  startAnim.start();
@@ -402,6 +410,7 @@ try {
     }
   };
 })();
+
 
   
 const images = {
