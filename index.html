@@ -75,8 +75,17 @@
     <img id="title2" src="assets/title/title_idle_2.png" alt="" />
   </div>
 
-  <!-- SPRITE START (style inline = anti-flash de mise en page) -->
-  <img id="startImg" src="assets/ui/start/start_idle_1.png" alt=""
+<!-- SPRITE START (2 images superposées animées en CSS) -->
+<div id="startSprite"
+     onclick="window.__IO83_START__ && window.__IO83_START__(event)"
+     style="position:absolute;left:50%;bottom:8%;transform:translateX(-50%) scale(0.30);transform-origin:50% 100%;
+            width:360px;height:360px;image-rendering:pixelated;cursor:pointer;user-select:none;z-index:9;">
+  <img id="start1" src="assets/ui/start/start_idle_1.png" alt=""
+       style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;">
+  <img id="start2" src="assets/ui/start/start_idle_2.png" alt=""
+       style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;">
+</div>
+
        style="position:absolute;left:50%;bottom:8%;transform:translateX(-50%) scale(0.30);transform-origin:50% 100%;
               width:360px;height:360px;image-rendering:pixelated;cursor:pointer;user-select:none;z-index:9;"
        onclick="window.__IO83_START__ && window.__IO83_START__(event)">
