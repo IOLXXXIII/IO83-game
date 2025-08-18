@@ -242,38 +242,82 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
   };
 
   
-// ——— Gate UI (LOADING uniquement) ———
+// ——— Gate UI (START sprite + LOADING) ———
 const gateUI = (() => {
-  if (!gate) return { showLoading(){}, stopAll(){} };
+  if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
 
+  // Sprite START (ton start_idle)
+  const startImg = document.createElement('img');
+  startImg.id = 'startImg';
+  Object.assign(startImg.style, {
+    position:'absolute',
+    left:'50%',
+    bottom:'8%',
+    transform:'translateX(-50%) scale(0.30)', // 70% plus petit
+    transformOrigin:'50% 100%',
+    width:'360px', height:'360px',
+    imageRendering:'pixelated',
+    pointerEvents:'auto',
+    cursor:'pointer',
+    userSelect:'none',
+    zIndex:'9'
+  });
+  startImg.src = (ASSETS.uiStart && ASSETS.uiStart[0]) || '';
+
+  // Sprite LOADING (bas droite)
   const loadingImg = document.createElement('img');
   loadingImg.id = 'loadingImg';
   Object.assign(loadingImg.style, {
     position:'absolute', right:'24px', bottom:'24px',
     width:'200px', height:'81px',
-    imageRendering:'pixelated', pointerEvents:'none', userSelect:'none', display:'none'
+    imageRendering:'pixelated',
+    pointerEvents:'none',
+    userSelect:'none',
+    display:'none',
+    zIndex:'10'
   });
   loadingImg.src = (ASSETS.uiLoading && ASSETS.uiLoading[0]) || '';
+
+  gate.appendChild(startImg);
   gate.appendChild(loadingImg);
 
+  // Petit moteur d’animation (alterne les frames à fps fixe)
   function makeAnimator(el, frames, fps){
     let i=0, id=null;
     function tick(){ i=(i+1)%frames.length; el.src = frames[i]; }
     return {
-      start(){ if(!frames || frames.length<=1 || id) return; id=setInterval(tick, Math.max(60, Math.floor(1000/fps))); },
+      start(){ if(!frames || frames.length<=1 || id) return;
+               id=setInterval(tick, Math.max(60, Math.floor(1000/fps))); },
       stop(){ if(id){ clearInterval(id); id=null; } },
       setVisible(v){ el.style.display = v?'block':'none'; }
     };
   }
 
-  // ➜ 50% plus lent : 8 fps → 4 fps
-  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 4);
+  // Animations
+  const startAnim   = makeAnimator(startImg,   ASSETS.uiStart   || [], 4); // idle doux
+  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 4); // 50% plus lent (8→4)
 
-  loadingAnim.setVisible(false);
+  // État initial : START visible, LOADING caché
+  startAnim.setVisible(true);  startAnim.start();
+  loadingAnim.setVisible(false); loadingAnim.stop();
+
+  // Le sprite START est cliquable (comme le fond)
+  startImg.addEventListener('click', onStart, {passive:false});
+  startImg.addEventListener('pointerdown', onStart, {passive:false});
 
   return {
-    showLoading(){ loadingAnim.setVisible(true); loadingAnim.start(); },
-    stopAll(){ loadingAnim.stop(); loadingAnim.setVisible(false); }
+    showStart(){
+      startAnim.setVisible(true);  startAnim.start();
+      loadingAnim.setVisible(false); loadingAnim.stop();
+    },
+    showLoading(){
+      startAnim.setVisible(false);  startAnim.stop();
+      loadingAnim.setVisible(true); loadingAnim.start();
+    },
+    stopAll(){
+      startAnim.stop(); loadingAnim.stop();
+      startAnim.setVisible(false); loadingAnim.setVisible(false);
+    }
   };
 })();
 
