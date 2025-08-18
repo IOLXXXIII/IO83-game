@@ -1428,11 +1428,13 @@ if(!ensureCanvas()){
 
 function tryStart(){ startAudio(); boot(); }
 
-// Attache robuste (click + pointerdown) et “once” manuel
+// --- Handlers
 function onStart(e){
-  e.preventDefault();
+  if (e) e.preventDefault();
   cleanup();
   tryStart();
+}
+
 function cleanup(){
   if (startBtn){
     startBtn.removeEventListener('click', onStart);
@@ -1444,7 +1446,7 @@ function cleanup(){
   }
 }
 
-// Écoute le bouton ET toute la zone gate (au cas où quelque chose recouvrirait encore)
+// Attache les listeners (1 seule fois au chargement)
 if (startBtn){
   startBtn.addEventListener('click', onStart, {passive:false});
   startBtn.addEventListener('pointerdown', onStart, {passive:false});
@@ -1455,7 +1457,7 @@ if (gate){
   gate.style.cursor = 'pointer'; // feedback visuel
 }
 
-  console.log('[IO83] main.js chargé ✔');
+console.log('[IO83] main.js chargé ✔');
 
  // --- FIN DU FICHIER ---
 })();
