@@ -1041,8 +1041,6 @@ function drawMyo(runVel,yOff,H=MYO_H){
     }
   }
 
-// Fallback bulle si aucune image n'est disponible
-function drawSpeechBubble(xCenter, yBottom){
   const w=160, h=80, r=8;
   const x = Math.round(xCenter - w/2);
   const y = Math.round(yBottom - h - 18);
@@ -1083,41 +1081,56 @@ function drawSpeechBubble(xCenter, yBottom){
 
 
   
-  function drawNPCs(yOff){
-    for(const n of npcs){
-      const base=n.frames[0]; if(!base) continue;
-      const s=NPC_H/base.height, dw=Math.round(base.width*s), dh=Math.round(base.height*s);
-      const footPad=Math.round(dh*FOOT_PAD_RATIO);
-      const sy=(GROUND_Y+yOff)-dh+footPad, sx=Math.floor(n.x - cameraX);
-      // Centre ↔ centre, symétrique
-      const npcCenter = n.x + dw/2; // dw = largeur réellement dessinée (déjà calculée juste au-dessus)
-      if (player.x < npcCenter - NPC_TURN_HYST)      n.face = 'left';
-      else if (player.x > npcCenter + NPC_TURN_HYST) n.face = 'right';
-      const img=n.frames[Math.floor(n.animT*2)%2]||base;
-      ctx.save();
-      if(n.face==='left'){ ctx.translate(sx+dw/2,sy); ctx.scale(-1,1); ctx.translate(-dw/2,0); ctx.drawImage(img,0,0,dw,dh); }
-      else ctx.drawImage(img,sx,sy,dw,dh);
-      ctx.restore();
+function drawNPCs(yOff){
+  for (const n of npcs){
+    const base = n.frames[0];
+    if (!base) continue;
 
-if(n.show){
-  const list = images.dialogs[n.type];
-  if(!n.dialogImg && list && list.length){
-    n.dialogImg = list[n.dialogIdx++ % list.length];
+    // Taille et position du sprite PNJ
+    const s = NPC_H / base.height;
+    const dw = Math.round(base.width * s);
+    const dh = Math.round(base.height * s);
+    const footPad = Math.round(dh * FOOT_PAD_RATIO);
+    const sy = (GROUND_Y + yOff) - dh + footPad;
+    const sx = Math.floor(n.x - cameraX);
+
+    // Orientation vers le joueur (garde le code existant)
+    const npcCenter = n.x + dw / 2;
+    if (player.x < npcCenter - NPC_TURN_HYST)      n.face = 'left';
+    else if (player.x > npcCenter + NPC_TURN_HYST) n.face = 'right';
+
+    const img = n.frames[Math.floor(n.animT * 2) % 2] || base;
+
+    // Dessin du PNJ
+    ctx.save();
+    if (n.face === 'left'){
+      ctx.translate(sx + dw/2, sy);
+      ctx.scale(-1, 1);
+      ctx.translate(-dw/2, 0);
+      ctx.drawImage(img, 0, 0, dw, dh);
+    } else {
+      ctx.drawImage(img, sx, sy, dw, dh);
+    }
+    ctx.restore();
+
+    // ---- ICI : UNIQUEMENT TES PNG DE BULLES ----
+    // On n'affiche une bulle QUE si n.show est vrai ET que n.dialogImg existe.
+    // Aucune “bulle fallback” n’est dessinée.
+    if (n.show && n.dialogImg){
+      const scale = 0.72;
+      const bw = n.dialogImg.width * scale;
+      const bh = n.dialogImg.height * scale;
+
+      // Centrer la bulle au-dessus du PNJ
+      const bx = sx + Math.round(dw / 2 - bw / 2);
+      const by = sy - Math.round(bh * 0.5);
+
+      ctx.drawImage(n.dialogImg, bx, by, bw, bh);
+    }
   }
-}else{
-  n.dialogImg = null;
 }
 
-if(n.dialogImg){
-  const scale=0.72, bw=n.dialogImg.width*scale, bh=n.dialogImg.height*scale;
-  const bx=sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5);
-  const by=sy - Math.round(bh*0.5);
-  ctx.drawImage(n.dialogImg,bx,by,bw,bh);
-}
-// (pas de fallback dessiné; on ne montre rien si pas de PNG)
-
-  }
-}
+  
   
   function drawPosters(yOff){
     for(const p of posters){
@@ -1256,13 +1269,39 @@ if(!wasOnGround && player.onGround){
 }
 
 
-    
-    // PNJ talk
-    for(const n of npcs){
-      const near=Math.abs(player.x-n.x)<=NPC_TALK_RADIUS;
-      if(near){ n.show=true; n.hideT=0; }
-      else if(n.show){ n.hideT=(n.hideT||0)+dt; if(n.hideT>=NPC_HIDE_DELAY){ n.show=false; n.dialogImg=null; n.hideT=0; } }
+// PNJ talk : avance d'UNE bulle à chaque apparition (pas de défilement en continu)
+for (const n of npcs){
+  const near = Math.abs(player.x - n.x) <= NPC_TALK_RADIUS;
+  const list = images.dialogs[n.type];
+
+  if (near){
+    if (!n.show){
+      // Le joueur vient d'entrer dans le rayon → on avance d'une bulle
+      n.show = true;
+      n.hideT = 0;
+      if (list && list.length){
+        n.dialogIdx = ((n.dialogIdx|0) + 1) % list.length; // +1 par apparition
+        n.dialogImg = list[n.dialogIdx];
+      } else {
+        n.dialogImg = null; // pas de PNG → rien
+      }
+    } else {
+      // toujours dans le rayon → on garde la même bulle
+      n.hideT = 0;
     }
+  } else if (n.show){
+    // on quitte le rayon → on masque après un court délai
+    n.hideT = (n.hideT || 0) + dt;
+    if (n.hideT >= NPC_HIDE_DELAY){
+      n.show = false;
+      n.dialogImg = null;
+      n.hideT = 0;
+      // On ne remet PAS dialogIdx à zéro → prochaine apparition = bulle suivante
+    }
+  }
+}
+
+
 
 // Posters
 const wantsDown = keys.has('ArrowDown') || keys.has('s');
