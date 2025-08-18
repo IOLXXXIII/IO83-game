@@ -80,7 +80,8 @@ html,body{
 
 html, body, #game { touch-action: none; }
 
-/* Bouton HTML visible en secours (toujours cliquable) */
-#startBtn{ display:block; }
+/* Pas de bouton HTML : on montre juste le sprite start_idle */
+#startBtn{ display:none !important; }
+
 
 
