@@ -239,11 +239,9 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
     uiStart:   ['assets/ui/start/start_idle_1.png'+CB, 'assets/ui/start/start_idle_2.png'+CB],
     uiLoading: Array.from({length:5}, (_,i)=>`assets/ui/loading/loading_idle_${i+1}.png${CB}`),
 
-    
-
-
   };
 
+  
 // ——— Gate UI (start + loading) ———
 const gateUI = (() => {
   if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
