@@ -54,80 +54,105 @@ function ensureCanvas(){
 
 
 
-  /* ========== Gate / HUD ========== */
-  const gate = document.getElementById('gate');
-  const startBtn = document.getElementById('startBtn');
+/* ========== Gate / HUD ========== */
+const gate = document.getElementById('gate');
+const startBtn = document.getElementById('startBtn');
 
-  // ====== START HANDLERS (définis en premier, dispo pour toute UI) ======
+// --- DÉMARRAGE DURABLE : premier geste humain = onStart (vraiment) ---
 let started = false;
+let hardStartArmed = false;
 
+// Compat : utilisé ailleurs (gateUI etc.)
 function tryStart(){ startAudio(); boot(); }
 
+// -> Démarrage robuste
 function onStart(e){
   if (started) return;
   started = true;
-  if (e) e.preventDefault();
+
+  // Empêche un éventuel scroll mobile / sélection
+  if (e) { try{ e.preventDefault(); }catch(_){} }
+
+  // Nettoie tous les hooks pour éviter les multi-feux
   cleanup();
+
+  // Feedback immédiat : on **retire l’écran titre maintenant**
+  if (gate) { try{ gate.style.display = 'none'; }catch(_){} }
+
+  // On kick tout de suite la boucle de rendu (écran noir = OK le temps du chargement)
+  if (ensureCanvas()) requestAnimationFrame(loop);
+
+  // Et on lance le boot (chargement assets + init monde)
   try {
     tryStart();
   } catch(err){
     console.error('[IO83] start error:', err);
-    // on permet un 2e essai si une erreur s'est produite avant boot
+    // on autorise un 2e essai manuel (via window.__IO83_START__)
     started = false;
   }
 }
 
-function onStartKey(e){
-  if (e.key === 'Enter' || e.key === ' ') onStart(e);
-}
+// Clavier (Enter / Espace)
+function onStartKey(e){ if (e.key === 'Enter' || e.key === ' ') onStart(e); }
 
+// Supprime tous les listeners « hard start »
 function cleanup(){
-  if (startBtn){
-    startBtn.onclick = null;
-    startBtn.removeEventListener('click', onStart);
-    startBtn.removeEventListener('pointerdown', onStart);
-  }
+  const winEvs = ['pointerdown','pointerup','click','mousedown','mouseup','touchstart','touchend','keydown','keyup','wheel','contextmenu','gamepadconnected'];
+  winEvs.forEach(ev => window.removeEventListener(ev, onStart, true));
+  window.removeEventListener('keydown', onStartKey, true);
+
   if (gate){
     gate.onclick = null;
     gate.removeEventListener('click', onStart);
     gate.removeEventListener('pointerdown', onStart);
     gate.removeEventListener('keydown', onStartKey);
   }
-  window.removeEventListener('pointerdown', onStart, true);
-  window.removeEventListener('click', onStart, true);
-  window.removeEventListener('keydown', onStartKey, true);
+  if (startBtn){
+    startBtn.onclick = null;
+    startBtn.removeEventListener('click', onStart);
+    startBtn.removeEventListener('pointerdown', onStart);
+  }
 }
 
-// — Branches primaire + ceintures et bretelles —
-if (gate){
-  gate.style.cursor = 'pointer';
-  gate.setAttribute('role','button');
-  gate.setAttribute('tabindex','0');
+// Arme le démarrage sur **toute** action utilisateur + timebomb de secours
+function armHardStart(){
+  if (hardStartArmed) return;
+  hardStartArmed = true;
 
-  // DOM0 + DOM2 (clic sur le gate ou ses enfants)
-  gate.onclick = onStart;
-  gate.addEventListener('click', onStart, {passive:false});
-  gate.addEventListener('pointerdown', onStart, {passive:false});
-  gate.addEventListener('keydown', onStartKey, {passive:false});
+  // Le « gate » agit comme un énorme bouton
+  if (gate){
+    gate.style.cursor = 'pointer';
+    gate.setAttribute('role','button');
+    gate.setAttribute('tabindex','0');
+
+    gate.onclick = onStart;
+    gate.addEventListener('click', onStart, {passive:false});
+    gate.addEventListener('pointerdown', onStart, {passive:false});
+    gate.addEventListener('keydown', onStartKey, {passive:false});
+  }
+
+  // **N’importe quelle action** démarre : clics, touches, wheel, tap, gamepad…
+  const opts = { capture:true, passive:false };
+  ['pointerdown','pointerup','click','mousedown','mouseup','touchstart','touchend','keydown','keyup','wheel','contextmenu']
+    .forEach(ev => window.addEventListener(ev, onStart, opts));
+  window.addEventListener('gamepadconnected', onStart, opts);
+
+  // Le bouton HTML (s’il est dévoilé) démarre aussi
+  if (startBtn){
+    startBtn.disabled = false;
+    startBtn.addEventListener('click', onStart, {passive:false});
+    startBtn.addEventListener('pointerdown', onStart, {passive:false});
+  }
+
+  // **Filet ultime** : auto-start après 2s (audio se démutera à la prochaine action)
+  setTimeout(()=>{ if(!started) onStart(); }, 2000);
+
+  // Exposé console (secours manuel)
+  window.__IO83_START__ = onStart;
 }
 
-// fallback global : premier input démarre quoi qu'il arrive (même si un calque recouvre)
-window.addEventListener('pointerdown', onStart, {passive:false, capture:true});
-window.addEventListener('click',       onStart, {passive:false, capture:true});
-window.addEventListener('keydown',  onStartKey, {passive:false, capture:true});
-
-// exposé global de secours (au cas où tu veux tester depuis la console)
-window.__IO83_START__ = onStart;
-
-
-  
-// Laisse le bouton visible (stylé par le CSS)
-if (startBtn){
-  // On ne touche pas à son style ici → c'est le CSS (#gate button) qui s'applique.
-  // On garantit juste qu'il reste cliquable.
-  startBtn.disabled = false;
-}
-
+// Arme dès maintenant
+armHardStart();
 
 
   const hud = document.getElementById('hud');
