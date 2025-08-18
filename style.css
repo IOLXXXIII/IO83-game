@@ -52,7 +52,7 @@ html,body{
 #startSprite{
   position:absolute;
   left:50%;
-  bottom:clamp(8px, 3.5vh, 48px);
+  bottom:clamp(4px, 2.25vh, 28px);  /* ← plus bas qu’avant */
   transform:translateX(-50%) scale(0.30);
   transform-origin:50% 100%;
   width:360px; height:360px;
