@@ -6,6 +6,24 @@
 
 (function(){
   'use strict';
+  // --- Stub ultra-tôt : permet d’appeler __IO83_START__ depuis le HTML AVANT que onStart soit défini
+if (!window.__IO83_PENDING_START__) window.__IO83_PENDING_START__ = false;
+window.__IO83_START__ = function(e){ window.__IO83_PENDING_START__ = true; };
+
+// --- Polyfills qui peuvent sinon bloquer le boot sur des moteurs plus vieux
+if (!Promise.allSettled) {
+  Promise.allSettled = function(promises){
+    return Promise.all(promises.map(function(p){
+      return Promise.resolve(p).then(
+        function(value){ return {status:'fulfilled', value:value}; },
+        function(reason){ return {status:'rejected',  reason:reason}; }
+      );
+    }));
+  };
+}
+if (!Array.from) {
+  Array.from = function(a){ return [].slice.call(a); };
+}
   // ——— Debug visuel : affiche une bannière rouge si une erreur JS survient ———
 window.addEventListener('error', function(ev){
   try{
@@ -69,28 +87,27 @@ function tryStart(){ startAudio(); boot(); }
 function onStart(e){
   if (started) return;
   started = true;
-
-  // Empêche un éventuel scroll mobile / sélection
   if (e) { try{ e.preventDefault(); }catch(_){} }
 
-  // Nettoie tous les hooks pour éviter les multi-feux
-  cleanup();
-
-  // Feedback immédiat : on **retire l’écran titre maintenant**
+  // Cache l’écran titre IMMÉDIATEMENT
   if (gate) { try{ gate.style.display = 'none'; }catch(_){} }
 
-  // On kick tout de suite la boucle de rendu (écran noir = OK le temps du chargement)
-  if (ensureCanvas()) requestAnimationFrame(loop);
+  // Nettoie pour éviter les multi-feux
+  cleanup();
 
-  // Et on lance le boot (chargement assets + init monde)
   try {
+    // Affiche le canvas et lance la boucle tout de suite (même si assets en cours)
+    if (ensureCanvas()) requestAnimationFrame(loop);
+
+    // Démarrage complet (audio + chargements)
     tryStart();
   } catch(err){
     console.error('[IO83] start error:', err);
-    // on autorise un 2e essai manuel (via window.__IO83_START__)
+    // autorise un 2e essai manuel si quelque chose a cassé avant boot()
     started = false;
   }
 }
+
 
 // Clavier (Enter / Espace)
 function onStartKey(e){ if (e.key === 'Enter' || e.key === ' ') onStart(e); }
@@ -149,6 +166,7 @@ function armHardStart(){
 
   // Exposé console (secours manuel)
   window.__IO83_START__ = onStart;
+if (window.__IO83_PENDING_START__) { try { onStart(); } catch(_){} }
 }
 
 // Arme dès maintenant
@@ -713,7 +731,7 @@ function loadAll(){
 
 
   // Dialogs (facultatif) — faire le fetch UNIQUEMENT en http(s) pour éviter les erreurs en file://
-  if (IS_HTTP) {
+  if (IS_HTTP && typeof fetch === 'function') {
     tasks.push(
       fetch(ASSETS.dialogsManifest)
         .then(r=>r.json())
