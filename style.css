@@ -48,8 +48,8 @@ html,body{
 @keyframes io83TitleA { 0%,49%{opacity:1} 50%,100%{opacity:0} }
 @keyframes io83TitleB { 0%,49%{opacity:0} 50%,100%{opacity:1} }
 
-/* Sprite START (petit, bas-centre) */
-#startImg{
+/* Sprite START (nouvelle version : 2 images, animées en CSS) */
+#startSprite{
   position:absolute;
   left:50%;
   bottom:clamp(8px, 3.5vh, 48px);
@@ -57,11 +57,20 @@ html,body{
   transform-origin:50% 100%;
   width:360px; height:360px;
   image-rendering:pixelated;
-  pointer-events:auto;
   cursor:pointer;
   user-select:none;
   z-index:9;
 }
+#startSprite img{
+  position:absolute; inset:0; width:100%; height:100%;
+  image-rendering:pixelated; pointer-events:none;
+}
+/* Alternance 2 frames du START (comme le titre) */
+#start1{ animation:startSwapA 0.5s steps(1) infinite; }
+#start2{ animation:startSwapB 0.5s steps(1) infinite; }
+@keyframes startSwapA { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+@keyframes startSwapB { 0%,49%{opacity:0} 50%,100%{opacity:1} }
+
 
 /* Sprite LOADING (bas-droite, caché au départ) */
 #loadingImg{
