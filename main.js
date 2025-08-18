@@ -242,43 +242,23 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
   };
 
   
-// ——— Gate UI (start + loading) ———
+// ——— Gate UI (LOADING uniquement) ———
 const gateUI = (() => {
-  if (!gate) return { showStart(){}, showLoading(){}, stopAll(){} };
+  if (!gate) return { showLoading(){}, stopAll(){} };
 
-  // Création des <img>
-  const startImg   = document.createElement('img');
   const loadingImg = document.createElement('img');
-  startImg.id = 'startImg';
   loadingImg.id = 'loadingImg';
-
-  // Styles : START centré vers le bas (360×360), LOADING en bas à droite (200×81)
-  Object.assign(startImg.style, {
-    position:'absolute', left:'50%', transform:'translateX(-50%)',
-    bottom:'8%', width:'360px', height:'360px',
-    imageRendering:'pixelated', pointerEvents:'none', userSelect:'none'
-  });
   Object.assign(loadingImg.style, {
     position:'absolute', right:'24px', bottom:'24px',
     width:'200px', height:'81px',
     imageRendering:'pixelated', pointerEvents:'none', userSelect:'none', display:'none'
   });
-
-  // Première frames
-  startImg.src   = (ASSETS.uiStart && ASSETS.uiStart[0])   || '';
   loadingImg.src = (ASSETS.uiLoading && ASSETS.uiLoading[0]) || '';
-
-  // Ajout au gate
-  gate.appendChild(startImg);
   gate.appendChild(loadingImg);
 
-  // Petit moteur d’animation (alterne les src à fps fixe)
   function makeAnimator(el, frames, fps){
-    let i = 0, id = null;
-    function tick(){
-      i = (i+1) % frames.length;
-      el.src = frames[i];
-    }
+    let i=0, id=null;
+    function tick(){ i=(i+1)%frames.length; el.src = frames[i]; }
     return {
       start(){ if(!frames || frames.length<=1 || id) return; id=setInterval(tick, Math.max(60, Math.floor(1000/fps))); },
       stop(){ if(id){ clearInterval(id); id=null; } },
@@ -286,29 +266,17 @@ const gateUI = (() => {
     };
   }
 
-  const startAnim   = makeAnimator(startImg,   ASSETS.uiStart   || [], 4); // 4 fps pour un idle doux
-  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 8); // 8 fps pour un “loading” plus vivant
+  // ➜ 50% plus lent : 8 fps → 4 fps
+  const loadingAnim = makeAnimator(loadingImg, ASSETS.uiLoading || [], 4);
 
-  // État initial : START visible + animé
-  startAnim.setVisible(true);
-  startAnim.start();
   loadingAnim.setVisible(false);
-  loadingAnim.stop();
 
   return {
-    showStart(){
-      startAnim.setVisible(true);  startAnim.start();
-      loadingAnim.setVisible(false); loadingAnim.stop();
-    },
-    showLoading(){
-      startAnim.setVisible(false);  startAnim.stop();
-      loadingAnim.setVisible(true); loadingAnim.start();
-    },
-    stopAll(){
-      startAnim.stop(); loadingAnim.stop();
-    }
+    showLoading(){ loadingAnim.setVisible(true); loadingAnim.start(); },
+    stopAll(){ loadingAnim.stop(); loadingAnim.setVisible(false); }
   };
 })();
+
   
 const images = {
   back:null, mid:null, front:null,
@@ -923,7 +891,7 @@ function drawMyo(runVel,yOff,H=MYO_H){
     }
   }
 
-  // Fallback visuel si aucune image de bulle n’est chargée
+// Fallback bulle si aucune image n'est disponible
 function drawSpeechBubble(xCenter, yBottom){
   const w=160, h=80, r=8;
   const x = Math.round(xCenter - w/2);
@@ -934,7 +902,7 @@ function drawSpeechBubble(xCenter, yBottom){
   ctx.strokeStyle = 'rgba(0,0,0,0.9)';
   ctx.lineWidth   = 2;
 
-  // corps arrondi
+  // corps
   ctx.beginPath();
   ctx.moveTo(x+r,y);
   ctx.arcTo(x+w,y, x+w,y+h, r);
@@ -952,7 +920,7 @@ function drawSpeechBubble(xCenter, yBottom){
   ctx.closePath();
   ctx.fill(); ctx.stroke();
 
-  // "…" minimal
+  // "…"
   ctx.fillStyle = '#222';
   const dy = y + h/2 - 3;
   ctx.beginPath();
@@ -962,6 +930,7 @@ function drawSpeechBubble(xCenter, yBottom){
   ctx.fill();
   ctx.restore();
 }
+
 
   
   function drawNPCs(yOff){
