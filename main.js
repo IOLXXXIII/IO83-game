@@ -1391,13 +1391,13 @@ function assetsCruciauxOk(){
   
 /* ========== Boot ========== */
 function boot(){
-  startBtn.disabled = true;
+  if (startBtn) startBtn.disabled = true;
   gateUI.showLoading();
 
-  if(!ensureCanvas()){
-    startBtn.disabled = false;
-    return;
-  }
+if(!ensureCanvas()){
+  if (startBtn) startBtn.disabled = false;
+  return;
+}
 
   loadAll().then(function(){
     // On signale si des visuels minimum manquent, MAIS on lance quand même la boucle.
@@ -1433,18 +1433,27 @@ function onStart(e){
   e.preventDefault();
   cleanup();
   tryStart();
-}
 function cleanup(){
-  startBtn.removeEventListener('click', onStart);
-  startBtn.removeEventListener('pointerdown', onStart);
-  gate.removeEventListener('click', onStart);
-  gate.removeEventListener('pointerdown', onStart);
+  if (startBtn){
+    startBtn.removeEventListener('click', onStart);
+    startBtn.removeEventListener('pointerdown', onStart);
+  }
+  if (gate){
+    gate.removeEventListener('click', onStart);
+    gate.removeEventListener('pointerdown', onStart);
+  }
 }
+
 // Écoute le bouton ET toute la zone gate (au cas où quelque chose recouvrirait encore)
-startBtn.addEventListener('click', onStart, {passive:false});
-startBtn.addEventListener('pointerdown', onStart, {passive:false});
-gate.addEventListener('click', onStart, {passive:false});
-gate.addEventListener('pointerdown', onStart, {passive:false});
+if (startBtn){
+  startBtn.addEventListener('click', onStart, {passive:false});
+  startBtn.addEventListener('pointerdown', onStart, {passive:false});
+}
+if (gate){
+  gate.addEventListener('click', onStart, {passive:false});
+  gate.addEventListener('pointerdown', onStart, {passive:false});
+  gate.style.cursor = 'pointer'; // feedback visuel
+}
 
   console.log('[IO83] main.js chargé ✔');
 
