@@ -88,6 +88,7 @@ function onStart(e){
   if (started) return;
   started = true;
   if (e) { try{ e.preventDefault(); }catch(_){} }
+  
 
   // >>> IMPORTANT : garder l’écran titre visible et afficher ton LOADING tout de suite
   gateUI.showLoading();     // bascule ton sprite loading_idle_1..5 (bas droite)
@@ -105,6 +106,8 @@ function onStart(e){
     started = false;        // permet un second essai si une exception survient
   }
 }
+
+  window.__IO83_START__ = onStart;
 
 
 // Clavier (Enter / Espace)
