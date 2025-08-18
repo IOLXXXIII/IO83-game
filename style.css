@@ -43,10 +43,10 @@ html,body{
   position:absolute; inset:0; /* occupe tout l’écran */
 }
 
-/* Le titre peut capter les clics et le gate recevra l’événement en bubble */
+/* Le titre ne capte rien → tout passe au gate/start sprite */
 #gate .title,
 #gate .title img {
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 
