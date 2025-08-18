@@ -89,22 +89,20 @@ function onStart(e){
   started = true;
   if (e) { try{ e.preventDefault(); }catch(_){} }
 
-  // Cache l’écran titre IMMÉDIATEMENT
-  if (gate) { try{ gate.style.display = 'none'; }catch(_){} }
-
-  // Nettoie pour éviter les multi-feux
-  cleanup();
+  // >>> IMPORTANT : garder l’écran titre visible et afficher ton LOADING tout de suite
+  gateUI.showLoading();     // bascule ton sprite loading_idle_1..5 (bas droite)
+  cleanup();                // on débranche les listeners "start"
 
   try {
-    // Affiche le canvas et lance la boucle tout de suite (même si assets en cours)
-    if (ensureCanvas()) requestAnimationFrame(loop);
-
-    // Démarrage complet (audio + chargements)
-    tryStart();
+    ensureCanvas();         // on prépare le canvas (sans démarrer la boucle)
+    startAudio();           // démuter musique au besoin
+    boot();                 // boot lance les chargements puis, seulement une fois prêt :
+                            //   - cache le gate
+                            //   - stoppe les UI gate
+                            //   - démarre la boucle de jeu
   } catch(err){
     console.error('[IO83] start error:', err);
-    // autorise un 2e essai manuel si quelque chose a cassé avant boot()
-    started = false;
+    started = false;        // permet un second essai si une exception survient
   }
 }
 
