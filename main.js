@@ -557,11 +557,10 @@ function checkAllComplete(){
   if (mode !== 'world') return; // jamais en intérieur
 
   if (allCompleteTimerId) clearTimeout(allCompleteTimerId);
-  allCompleteTimerId = setTimeout(()=>{
-    ensureAllCompleteOverlay().style.display='grid';
-    playDing();
-    allCompleteShown = true;
-  }, 3000);
+allCompleteTimerId = setTimeout(()=>{
+  ensureAllCompleteOverlay().style.display='grid';
+  allCompleteShown = true;
+}, 3000);
 }
 
 
@@ -574,11 +573,10 @@ function checkAbsoluteComplete(){
   if(mode!=='world') return;
   // Affiche ~5 s après la dernière mise à jour
   if(absoluteTimerId) clearTimeout(absoluteTimerId);
-  absoluteTimerId = setTimeout(()=>{
-    ensureAbsoluteOverlay().style.display='grid';
-    playDing(); // sfx_terminal_ding
-    absoluteShown = true;
-  }, 3000);
+absoluteTimerId = setTimeout(()=>{
+  ensureAbsoluteOverlay().style.display='grid';
+  absoluteShown = true;
+}, 3000);
 }
 
 
@@ -697,6 +695,20 @@ function loadAll(){
         .catch(()=>{})
     );
   }
+
+  // Fallback dialogs sans manifest (file:// ou manifest absent) : charge 01/02 par défaut
+tasks.push((async ()=>{
+  const types = ['aeron','kaito','maonis','kahikoans'];
+  for (const t of types){
+    if (images.dialogs[t] && images.dialogs[t].length) continue; // déjà remplis via manifest
+    const guess = [
+      `assets/ui/dialogs/${t}/dialog_${t}_01.png${CB}`,
+      `assets/ui/dialogs/${t}/dialog_${t}_02.png${CB}`
+    ];
+    const arr = (await Promise.all(guess.map(L))).filter(Boolean);
+    images.dialogs[t] = arr; // peut être [] si rien n’existe, mais on essaye.
+  }
+})());
 
 
   // Bâtiments (4 types)
@@ -1085,10 +1097,9 @@ if(n.dialogImg){
   const bx=sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5);
   const by=sy - Math.round(bh*0.5);
   ctx.drawImage(n.dialogImg,bx,by,bw,bh);
-} else if (n.show){
-  // Fallback si aucune image de bulle n’est dispo
-  drawSpeechBubble(sx + Math.round(dw/2), sy);
 }
+// (pas de fallback dessiné; on ne montre rien si pas de PNG)
+
   }
 }
   
