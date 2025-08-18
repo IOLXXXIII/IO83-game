@@ -86,10 +86,6 @@
        style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;pointer-events:none;">
 </div>
 
-       style="position:absolute;left:50%;bottom:8%;transform:translateX(-50%) scale(0.30);transform-origin:50% 100%;
-              width:360px;height:360px;image-rendering:pixelated;cursor:pointer;user-select:none;z-index:9;"
-       onclick="window.__IO83_START__ && window.__IO83_START__(event)">
-
   <!-- SPRITE LOADING (caché au départ, style inline = anti-flash) -->
   <img id="loadingImg" src="assets/ui/loading/loading_idle_1.png" alt=""
        style="position:absolute;right:24px;bottom:24px;width:200px;height:81px;image-rendering:pixelated;
@@ -124,4 +120,10 @@
   <script src="main.js" defer></script>
 </body>
 </html>
+
+#gate:focus { outline: none; }
+#gate:focus-visible { outline: 2px solid #6aa0ff; outline-offset: 2px; }
+#gate { user-select: none; }
+
+
 
