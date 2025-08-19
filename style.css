@@ -84,11 +84,14 @@ html, body, #game,
   background:#000a; color:#fff; font:600 20px/1.2 system-ui; z-index:99999;
 }
 
-/* Verrou paysage : en portrait on masque jeu + gate + contrôles */
+/* Verrou paysage : en portrait on masque le jeu, mais on laisse le START cliquable */
 @media (orientation:portrait){
   #rotateHint{ display:flex }
-  #game, #hud, #gate, #touchLeft, #touchRight, #btnJump, #btnAction{ display:none !important; }
+  /* on masque le canvas + HUD + contrôles, MAIS PAS le gate */
+  #game, #hud, #touchLeft, #touchRight, #btnJump, #btnAction{ display:none !important; }
+  #gate{ display:grid !important; } /* ← START visible et cliquable */
 }
+
 
 /* Contrôles tactiles — cachés jusqu'au START + paysage */
 @media (pointer:coarse){
