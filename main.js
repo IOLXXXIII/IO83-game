@@ -1517,11 +1517,17 @@ setEggs();
   }
 
 function assetsCruciauxOk(){
-  // Il faut au minimum : 1 frame idle de Myo + le ground (devant).
+  // Minimum vital pour pouvoir construire le monde SANS planter :
+  // 1) une frame idle de Myo (perso)
+  // 2) l'image du sol (front)
+  // 3) au moins UN "pair" de bâtiment chargé (pour le fallback dans buildWorld)
   const okMyo    = !!(images.myoIdle && images.myoIdle[0]);
   const okGround = !!images.front;
-  return okMyo && okGround;
+  const okOneBld = !!(images.buildings && images.buildings.length &&
+                      images.buildings[0] && images.buildings[0][0]);
+  return okMyo && okGround && okOneBld;
 }
+
 
   
 /* ========== Boot ========== */
