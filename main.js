@@ -662,20 +662,6 @@ let worldReady=false;
 function loadAll(){
   const L = (src)=>loadImg(src);
   const tasks = [];
-// --- Seed de 1 bulle par PNJ clé (chargées très tôt pour éviter le "vide" au début)
-const DSEED = ['aeron','kahikoans','kaito','maonis'];
-tasks.push(Promise.all(DSEED.map(function(t){
-  const url = `assets/ui/dialogs/${t}/dialog_${t}_01.png${CB}`;
-  return L(url).then(function(img){
-    if (img) {
-      if (!images.dialogs[t]) images.dialogs[t] = [];
-      if (!images.dialogs[t].length) images.dialogs[t].push(img); // au moins 1 bulle prête
-    }
-    return true;
-  }).catch(function(){ return true; });
-})));
-
-
   tasks.push(L(ASSETS.absoluteCompletePNG).then(i=>{ images.absoluteComplete = i; }).catch(()=>{}));
 
 
@@ -1530,90 +1516,49 @@ setEggs();
     requestAnimationFrame(loop);
   }
 
-  
 function assetsCruciauxOk(){
-  // 1) perso et animations de base
-  const okMyoIdle = !!(images.myoIdle && images.myoIdle[0]);
-  const okMyoWalk = !!(images.myoWalk && images.myoWalk[0]);
-
-  // 2) décor/parallax + sol (pour GROUND_Y stable)
-  const okBG = !!(images.back && images.mid && images.front);
-
-  // 3) AU MOINS un "pair" de bâtiment (buildWorld nécessite un sprite)
-  const okOneBld = !!(images.buildings && images.buildings.length &&
-                      images.buildings[0] && images.buildings[0][0]);
-
-  // 4) mur de fin (évite un changement tardif de monde)
-  const okEndWall = !!(images.buildingWall && images.buildingWall[0]);
-
-  // 5) intérieur minimal (écran fermé + 1er frame d’ouverture)
-  const okInterior = !!(images.interiorClosedIdle && images.interiorClosedIdle[0] &&
-                        images.interiorOpens && images.interiorOpens[0]);
-
-  // 6) PNJ visibles tôt + au moins 1 bulle chacun
-  const okNPCAeron  = !!(images.npcs.aeron && images.npcs.aeron[0]);
-  const okNPCKahi   = !!(images.npcs.kahikoans && images.npcs.kahikoans[0]);
-  const okDlgAeron  = !!(images.dialogs.aeron && images.dialogs.aeron.length);
-  const okDlgKahi   = !!(images.dialogs.kahikoans && images.dialogs.kahikoans.length);
-
-  return okMyoIdle && okMyoWalk &&
-         okBG && okOneBld && okEndWall && okInterior &&
-         okNPCAeron && okNPCKahi && okDlgAeron && okDlgKahi;
+  // Il faut au minimum : 1 frame idle de Myo + le ground (devant).
+  const okMyo    = !!(images.myoIdle && images.myoIdle[0]);
+  const okGround = !!images.front;
+  return okMyo && okGround;
 }
-
-
-  // ==== Garde de démarrage ====
-const MIN_BOOT_MS = 5000; // 5 s de LOADING minimum pour une UX parfaite
-let _bootStartTs = 0;
-let _gameStarted = false;
-
-function startGame(){
-  if (_gameStarted) return;
-  _gameStarted = true;
-
-  recalcGround();
-  buildWorld();
-  worldReady = true;
-
-  if (gate) gate.style.display = 'none';
-  if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
-  requestAnimationFrame(loop);
-}
-
 
   
+/* ========== Boot ========== */
 function boot(){
   if (startBtn) startBtn.disabled = true;
   if (window.gateUI && window.gateUI.showLoading) window.gateUI.showLoading();
 
-  if(!ensureCanvas()){
-    if (startBtn) startBtn.disabled = false;
-    return;
-  }
-
-  _bootStartTs = performance.now();
-
-  // Sonde rapide tant que les assets critiques ne sont pas prêts
-  const fastTimer = setInterval(()=>{
-    if (_gameStarted) { clearInterval(fastTimer); return; }
-    const enoughTime = (performance.now() - _bootStartTs) >= MIN_BOOT_MS;
-    if (enoughTime && assetsCruciauxOk()){
-      clearInterval(fastTimer);
-      startGame();
-    }
-  }, 100);
-
-  // Chargement complet
-  loadAll().then(function(){
-    clearInterval(fastTimer);
-    // Si tout est déjà prêt mais < 5 s, on complète l'attente
-    const left = Math.max(0, MIN_BOOT_MS - (performance.now() - _bootStartTs));
-    setTimeout(function(){
-      if (!_gameStarted) startGame();
-    }, left);
-  });
+if(!ensureCanvas()){
+  if (startBtn) startBtn.disabled = false;
+  return;
 }
 
+  loadAll().then(function(){
+    // On signale si des visuels minimum manquent, MAIS on lance quand même la boucle.
+    const missing = [
+      !(images.myoIdle && images.myoIdle[0]) ? 'images.myoIdle[0]' : null,
+      !images.front ? 'images.front (ground.png)' : null
+    ].filter(Boolean);
+
+    if (missing.length){
+      const note = document.getElementById('loadNote') || document.createElement('div');
+      note.id = 'loadNote';
+      Object.assign(note.style, {
+        position:'absolute', bottom:'12px', left:'12px', right:'12px',
+        font:'12px/1.4 system-ui', color:'#bbb', opacity:'0.9'
+      });
+      note.textContent = 'Chargement incomplet (fallback actif). Manque: ' + missing.join(', ');
+      gate.appendChild(note);
+      console.warn('[IO83] Fallback actif. Manque :', missing);
+    }
+
+    gate.style.display = 'none';
+    if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
+    requestAnimationFrame(loop);
+  });
+
+}
 
 console.log('[IO83] main.js chargé ✔');
 
