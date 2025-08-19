@@ -586,6 +586,49 @@ btnA.addEventListener('pointercancel',()=>pressOff(btnA));
   btnA.addEventListener('pointercancel',()=>{ actionUp(); }, {passive:true});
 })();
 
+<script>
+(function(){
+  const hud = document.getElementById('mobileHUD');        // ton conteneur de boutons
+  const gate = document.getElementById('gate');
+
+  // sécurité: caché au départ
+  if (hud) hud.style.display = 'none';
+
+  function isLandscape(){
+    return window.matchMedia && window.matchMedia('(orientation: landscape)').matches;
+  }
+  function gateVisible(){
+    return gate && getComputedStyle(gate).display !== 'none';
+  }
+  function syncHUD(){
+    if (!hud) return;
+    const show = isLandscape() && !gateVisible();
+    hud.style.display = show ? 'block' : 'none';
+  }
+
+  // Suivre la disparition du gate (quand le jeu démarre)
+  if (gate && 'MutationObserver' in window){
+    new MutationObserver(syncHUD).observe(gate,{attributes:true,attributeFilter:['style','class']});
+  }
+  window.addEventListener('orientationchange', syncHUD);
+  window.addEventListener('resize',           syncHUD);
+
+  // Optionnel: tenter un lock paysage après 1er geste (ne gêne pas si refusé)
+  window.addEventListener('pointerdown', function once(){
+    window.removeEventListener('pointerdown', once);
+    try{ if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape'); }catch(_){}
+  }, {once:true});
+
+  // petit polling au cas où (robuste, 250 ms)
+  const t = setInterval(syncHUD, 250);
+  document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible') syncHUD(); });
+
+  syncHUD();
+})();
+</script>
+
+
+
   
 
   
