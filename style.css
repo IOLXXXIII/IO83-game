@@ -1,11 +1,14 @@
 :root { --ui-bg:#000; --ui-fg:#e8e8e8; --ui-accent:#ffcc00; }
 *{ box-sizing:border-box }
+
+/* Base */
 html,body{
   height:100%; margin:0; background:#000; color:var(--ui-fg);
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
 }
+html, body, #game { touch-action: none; } /* anti scroll/zoom sur mobile */
 
-/* Canvas : plein écran 16:9 */
+/* Canvas 16:9 responsive centré */
 #game{
   display:block; margin:0 auto;
   max-width:100vw; max-height:100vh;
@@ -18,8 +21,7 @@ html,body{
 #hud{
   position:fixed; top:10px; left:50%; transform:translateX(-50%);
   display:flex; gap:24px; align-items:center; z-index:2; pointer-events:none;
-  text-shadow:0 1px 2px #000;
-  font-weight:600;
+  text-shadow:0 1px 2px #000; font-weight:600;
 }
 #score{ letter-spacing:.5px }
 #scoreNum{ color:var(--ui-accent) }
@@ -31,83 +33,69 @@ html,body{
   position:fixed; inset:0; display:grid; place-items:center;
   background:#000; z-index:3;
 }
-#gate .title{
-  position:absolute; inset:0;
-}
+#gate .title{ position:absolute; inset:0; z-index:1; }
 #gate .title img{
-  position:absolute; inset:0;
-  width:100%; height:100%;
-  object-fit:contain;
-  image-rendering:pixelated;
-  pointer-events:none; /* le titre ne capte rien → le gate reçoit les clics */
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:contain; image-rendering:pixelated; pointer-events:none;
 }
 
-/* Alternance 2 frames du titre — VERSION UNIQUE (pas de doublon) */
+/* Titre 2 frames */
 #title1{ animation:io83TitleA 1.1s steps(1) infinite; }
 #title2{ animation:io83TitleB 1.1s steps(1) infinite; }
 @keyframes io83TitleA { 0%,49%{opacity:1} 50%,100%{opacity:0} }
 @keyframes io83TitleB { 0%,49%{opacity:0} 50%,100%{opacity:1} }
 
-/* Sprite START (nouvelle version : 2 images, animées en CSS) */
+/* Sprite START (2 frames) */
 #startSprite{
-  position:absolute;
-  left:50%;
-  bottom:clamp(12px, 1.25vh, 24px); /* nettement plus bas, stable */
+  position:absolute; left:50%;
+  bottom:clamp(12px, 1.25vh, 24px);
   transform:translateX(-50%) scale(0.30);
   transform-origin:50% 100%;
   width:360px; height:360px;
-  image-rendering:pixelated;
-  cursor:pointer;
-  user-select:none;
-  z-index:9;
+  image-rendering:pixelated; cursor:pointer; user-select:none; z-index:9;
 }
-
-#startSprite img{
-  position:absolute; inset:0; width:100%; height:100%;
-  image-rendering:pixelated; pointer-events:none;
-}
-/* Alternance 2 frames du START (comme le titre) */
+#startSprite img{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 #start1{ animation:startSwapA 0.5s steps(1) infinite; }
 #start2{ animation:startSwapB 0.5s steps(1) infinite; }
 @keyframes startSwapA { 0%,49%{opacity:1} 50%,100%{opacity:0} }
 @keyframes startSwapB { 0%,49%{opacity:0} 50%,100%{opacity:1} }
 
-
-/* Sprite LOADING (bas-droite, caché au départ) */
+/* Sprite LOADING (masqué par défaut, affiché par JS gateUI) */
 #loadingImg{
-  position:absolute;
-  right:24px; bottom:24px;
-  width:200px; height:81px;
-  image-rendering:pixelated;
-  pointer-events:none;
-  user-select:none;
-  display:none;
-  z-index:10;
+  position:absolute; right:24px; bottom:24px;
+  width:200px; height:81px; image-rendering:pixelated;
+  pointer-events:none; user-select:none; display:none; z-index:10;
 }
 
-/* Bouton HTML de secours toujours masqué (on garde le handler JS) */
+/* Bouton HTML de secours toujours masqué */
 #startBtn{ display:none !important; }
 
-/* Le titre derrière les sprites START / LOADING */
-#gate .title { z-index:1; }
+/* Indication Portrait */
+#rotateHint{
+  position:fixed; inset:0; display:none;
+  align-items:center; justify-content:center;
+  background:#000a; color:#fff; font:600 20px/1.2 system-ui; z-index:99999;
+}
 
-html, body, #game { touch-action: none; }
+/* Verrou paysage : en portrait on masque jeu + gate + contrôles */
+@media (orientation:portrait){
+  #rotateHint{ display:flex }
+  #game, #hud, #gate, #touchLeft, #touchRight, #btnJump, #btnAction{ display:none !important; }
+}
 
-#gate:focus { outline: none; }
-#gate:focus-visible { outline: 2px solid #6aa0ff; outline-offset: 2px; }
-
-
-
-
-@media (pointer:coarse) {
+/* Contrôles tactiles — cachés jusqu'au START + paysage */
+@media (pointer:coarse){
   .io-touch-half{
     position:fixed; inset:0 auto 0 0; width:50vw;
-    touch-action:none; pointer-events:none; /* activé après START par JS */
+    display:none;                  /* JS -> block après START en paysage */
+    touch-action:none; pointer-events:none; z-index:5;
   }
   .io-touch-half.io-right{ left:auto; right:0; }
 
   .io-btn-img{
-    position:fixed; z-index:50; pointer-events:none; /* activé après START */
+    position:fixed; z-index:50;
+    display:none;                  /* JS -> block après START en paysage */
+    pointer-events:none;           /* JS -> auto après START */
     width:clamp(72px,14vw,110px); height:auto;
     image-rendering: pixelated; user-select:none; -webkit-user-drag:none;
     transform-origin:center; transition:transform .05s linear, opacity .12s;
@@ -126,9 +114,6 @@ html, body, #game { touch-action: none; }
   }
 }
 
-
-/* Conteneur mobile */
-#mobileHUD{position:fixed;inset:auto 0 0 0; height:0; pointer-events:none; display:none; z-index:9999;}
-#mobileHUD img{pointer-events:auto; user-select:none; -webkit-user-drag:none;}
-/* Ex.: place tes deux <img> via style inline ou classes, comme tu veux */
-
+/* Accessibilité focus gate */
+#gate:focus { outline: none; }
+#gate:focus-visible { outline: 2px solid #6aa0ff; outline-offset: 2px; }
