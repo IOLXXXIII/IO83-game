@@ -215,6 +215,7 @@ try{
   let allCompleteOverlay = null;
   let allCompleteTimerId = null;
   let allCompleteShown   = false;
+  let allCompleteReshown = false;
   let pendingAllComplete = false;
   let absoluteOverlay = null;
   let absoluteTimerId = null;
@@ -462,6 +463,9 @@ function addShake(s){ shakeAmp = Math.min(6, shakeAmp + s); }
 const DASH_TRAIL_FPS = 8; // ~10–11% plus lent que 9
   const DASH_TRAIL_VIS = 0.32; // durée d’affichage du trail en secondes
 let dashTrailT = 0;          // compte à rebours du trail
+  /* Tempo de rotation des bulles PNJ (en secondes) */
+const DIALOG_ADVANCE_SECS = 2.6;
+
 
 
 
@@ -1051,6 +1055,7 @@ function drawMyo(runVel,yOff,H=MYO_H){
       else if(n.show){ n.hideT=(n.hideT||0)+dt; if(n.hideT>=NPC_HIDE_DELAY){ n.show=false; n.dialogImg=null; n.hideT=0; } }
     }
 
+  
 // Posters
 const wantsDown = keys.has('ArrowDown') || keys.has('s');
 for (const p of posters){
@@ -1073,13 +1078,23 @@ for (const p of posters){
       setWanted();
       if (sfx.wanted) sfx.wanted.play().catch(()=>{});
 
-      // Posters → à 10/10 (une seule fois)
-      if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
-        if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
-        ensureOverlay().style.display = 'grid';
-        playDing();
-        postersCompleteShown = true;
-      }
+// Posters → à 10/10 (une seule fois) : un seul son, pas de double « ding »
+if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
+  // on joue UNIQUEMENT le son dédié aux posters (pas le sfx_terminal_ding)
+  if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
+  ensureOverlay().style.display = 'grid';
+  postersCompleteShown = true;
+}
+      // Re-affichage "all_complete" à 11/10 + son (si jamais Absolute n'est pas déjà vrai)
+if (allCompleteShown && !allCompleteReshown && eggs >= 10 && postersCount >= 11 && !(eggs >= 11 && postersCount >= 11)) {
+  setTimeout(()=>{
+    ensureAllCompleteOverlay().style.display = 'grid';
+    playDing(); // on force le son ici
+  }, 3000);
+  allCompleteReshown = true;
+}
+
+
     }
   }
 }
@@ -1254,43 +1269,6 @@ for (const n of npcs){
     }
   }
 }
-
-
-
-
-// Posters
-const wantsDown = keys.has('ArrowDown') || keys.has('s');
-for (const p of posters){
-  const center = p.x + p.w/2;
-  const dx = Math.abs(player.x - center);
-  const feetY = GROUND_Y - 110 + player.y;
-  const over = aabb(player.x-26, feetY, 52, 110, p.x, p.y, p.w, p.h);
-
-  if (!p.taken && !p.taking && dx <= COLLECT_RADIUS && over && wantsDown){
-    p.taking = true; 
-    p.t = 0;
-  }
-
-  if (p.taking){
-    p.t += dt;
-    if (p.t >= COLLECT_DUR){
-      p.taking = false;
-      p.taken = true;
-      postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
-      setWanted();
-      if (sfx.wanted) sfx.wanted.play().catch(()=>{});
-
-      // Posters → à 10/10 (une seule fois)
-      if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
-        if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
-        ensureOverlay().style.display = 'grid';
-        playDing();
-        postersCompleteShown = true;
-      }
-    }
-  }
-}
-
 
 
     // Portes
