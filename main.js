@@ -35,6 +35,17 @@ window.addEventListener('error', function(ev){
 });
 
 
+// Neutralise zoom/pinch/double-tap (iOS/Android)
+(function hardBlockGestures(){
+  const opt = { passive:false };
+  document.addEventListener('dblclick', e => e.preventDefault(), opt);       // double-tap zoom
+  ['gesturestart','gesturechange','gestureend'].forEach(ev =>                // pinch (Safari)
+    document.addEventListener(ev, e => e.preventDefault(), opt)
+  );
+})();
+
+  
+
   /* ========== Utils ========== */
   const rnd=(a,b)=>Math.random()*(b-a)+a;
   const rint=(a,b)=>Math.floor(rnd(a,b+1));
@@ -452,7 +463,7 @@ const images = {
 /* ===== MOBILE CONTROLS (left/right + JUMP + ACTION) ===== */
 (function mobileControls(){
   const isTouch = navigator.maxTouchPoints > 0;
-  if (!isTouch) return; // Desktop: rien à faire
+  if (!isTouch) return;
 
   const left  = document.getElementById('touchLeft');
   const right = document.getElementById('touchRight');
@@ -460,40 +471,33 @@ const images = {
   const btnA  = document.getElementById('btnAction');
   if (!left || !right || !btnJ || !btnA) return;
 
-  // Icônes (avec cache-busting uniquement en http/https)
+  // Icônes (avec cache-busting si http/https)
   btnJ.src = 'assets/ui/mobile/btn_jump.png'   + (IS_HTTP ? CB : '');
   btnA.src = 'assets/ui/mobile/btn_action.png' + (IS_HTTP ? CB : '');
 
-  // Helpers d'affichage
-  function inLandscape(){
-    if (window.matchMedia) return matchMedia('(orientation: landscape)').matches;
-    return window.innerWidth >= window.innerHeight;
-  }
+  // Helpers affichage (pas de contrôles sur l’écran titre / ni en portrait)
+  function inLandscape(){ return matchMedia('(orientation: landscape)').matches; }
   function gateVisible(){ return gate && getComputedStyle(gate).display !== 'none'; }
   function showUI(show){
     const disp = show ? 'block' : 'none';
     const pe   = show ? 'auto'  : 'none';
-    [left,right,btnJ,btnA].forEach(el=>{
-      el.style.display = disp;
-      el.style.pointerEvents = pe;
-    });
+    [left,right,btnJ,btnA].forEach(el => { el.style.display=disp; el.style.pointerEvents=pe; });
   }
   function syncUI(){ showUI(inLandscape() && !gateVisible()); }
 
-  // Observer la disparition du gate
+  // Observe la disparition du gate (après START)
   if ('MutationObserver' in window && gate){
     new MutationObserver(syncUI).observe(gate,{attributes:true,attributeFilter:['style','class']});
   }
   addEventListener('resize', syncUI);
   addEventListener('orientationchange', syncUI);
 
-  // Tenter le lock paysage après 1er geste (silencieux si refusé)
-  addEventListener('pointerdown', function once(){
-    removeEventListener('pointerdown', once);
+  // Essai silencieux de lock paysage après 1er geste
+  addEventListener('pointerdown', function once(){ removeEventListener('pointerdown', once);
     try{ screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'); }catch(_){}
   }, {once:true});
 
-  // Feedback visuel pressé
+  // Feedback visuel
   const pressOn  = el => el.classList.add('pressed');
   const pressOff = el => el.classList.remove('pressed');
   btnJ.addEventListener('pointerdown', e=>{ e.preventDefault(); pressOn(btnJ); }, {passive:false});
@@ -503,11 +507,16 @@ const images = {
   btnA.addEventListener('pointerup',   ()=>pressOff(btnA));
   btnA.addEventListener('pointercancel',()=>pressOff(btnA));
 
-  // Direction courante & double-tap dash
+  // Direction + dash (double-tap OU flick rapide)
   let activeDir = null;
   let leftDownId = null, rightDownId = null;
   let lastTapUp = { left:0, right:0 };
-  const TAP_MAX_DUR = 200, DOUBLE_TAP_GAP = 220, TAP_MOVE_MAX = 12;
+
+  const TAP_MAX_DUR = 200;       // ms max pour considérer un "tap"
+  const DOUBLE_TAP_GAP = 220;    // ms max entre deux taps
+  const TAP_MOVE_MAX = 12;       // px max pour rester un tap
+  const FLICK_DIST = 60;         // px min
+  const FLICK_TIME = 160;        // ms max pour flick
   const now = ()=>performance.now();
 
   function setDir(dir){
@@ -518,28 +527,39 @@ const images = {
     activeDir = dir;
   }
 
-  function handleSide(sideEl, sideName){
-    let startX=0, startY=0, startT=0;
+  // ——— Gestion côté (pointer + touch fallback) ———
+  function bindSide(sideEl, sideName){
+    let startX=0, startY=0, startT=0, moved=false;
+
+    // Pointer Events
     sideEl.addEventListener('pointerdown', ev=>{
       if (ev.pointerType!=='touch' && ev.pointerType!=='pen') return;
       ev.preventDefault();
-      if (sideName==='left'){ leftDownId = ev.pointerId; setDir('left'); }
-      else { rightDownId = ev.pointerId; setDir('right'); }
-      startX = ev.clientX; startY = ev.clientY; startT = now();
+      if (sideName==='left'){ leftDownId=ev.pointerId; setDir('left'); }
+      else { rightDownId=ev.pointerId; setDir('right'); }
+      startX=ev.clientX; startY=ev.clientY; startT=now(); moved=false;
     }, {passive:false});
+
+    sideEl.addEventListener('pointermove', ev=>{
+      if ((sideName==='left'  && ev.pointerId!==leftDownId) ||
+          (sideName==='right' && ev.pointerId!==rightDownId)) return;
+      // on ne change pas la direction pendant le drag (on garde appuyé)
+    }, {passive:true});
 
     sideEl.addEventListener('pointerup', ev=>{
       if ((sideName==='left'  && ev.pointerId!==leftDownId) ||
           (sideName==='right' && ev.pointerId!==rightDownId)) return;
       ev.preventDefault();
-
       const dt = now() - startT;
-      const dx = Math.abs(ev.clientX - startX);
-      const dy = Math.abs(ev.clientY - startY);
-      const isTap = (dt <= TAP_MAX_DUR && Math.max(dx,dy) <= TAP_MOVE_MAX);
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      const isTap = (dt <= TAP_MAX_DUR && Math.max(adx,ady) <= TAP_MOVE_MAX);
+      const isFlick = (dt <= FLICK_TIME && adx >= FLICK_DIST && ((dx>0 && sideName==='right') || (dx<0 && sideName==='left')));
 
       const t = now();
-      if (isTap && (t - lastTapUp[sideName]) <= DOUBLE_TAP_GAP) tryDash(sideName); // 'left'|'right'
+      if (isTap && (t - lastTapUp[sideName]) <= DOUBLE_TAP_GAP) tryDash(sideName);
+      else if (isFlick) tryDash(sideName);
       lastTapUp[sideName] = t;
 
       if (sideName==='left'){ leftDownId=null; } else { rightDownId=null; }
@@ -548,38 +568,80 @@ const images = {
       else setDir(null);
     }, {passive:false});
 
-    sideEl.addEventListener('pointercancel', ()=>{
-      if (sideName==='left') leftDownId=null; else rightDownId=null;
+    sideEl.addEventListener('pointercancel', ()=>{ if (sideName==='left') leftDownId=null; else rightDownId=null;
+      if (!leftDownId && !rightDownId) setDir(null);
+    });
+
+    // Touch fallback (vieux Safari sans PointerEvents)
+    sideEl.addEventListener('touchstart', ev=>{
+      ev.preventDefault();
+      const t = ev.changedTouches[0]; if (!t) return;
+      if (sideName==='left'){ leftDownId = 'touch'; setDir('left'); } else { rightDownId='touch'; setDir('right'); }
+      startX=t.clientX; startY=t.clientY; startT=now(); moved=false;
+    }, {passive:false});
+
+    sideEl.addEventListener('touchmove', ev=>{
+      ev.preventDefault(); // évite pan/zoom
+    }, {passive:false});
+
+    sideEl.addEventListener('touchend', ev=>{
+      ev.preventDefault();
+      const t0 = ev.changedTouches[0]; if (!t0) return;
+      const dt = now() - startT;
+      const dx = t0.clientX - startX;
+      const dy = t0.clientY - startY;
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      const isTap = (dt <= TAP_MAX_DUR && Math.max(adx,ady) <= TAP_MOVE_MAX);
+      const isFlick = (dt <= FLICK_TIME && adx >= FLICK_DIST && ((dx>0 && sideName==='right') || (dx<0 && sideName==='left')));
+
+      const t = now();
+      if (isTap && (t - lastTapUp[sideName]) <= DOUBLE_TAP_GAP) tryDash(sideName);
+      else if (isFlick) tryDash(sideName);
+      lastTapUp[sideName] = t;
+
+      if (sideName==='left'){ leftDownId=null; } else { rightDownId=null; }
+      if (rightDownId!=null) setDir('right');
+      else if (leftDownId!=null) setDir('left');
+      else setDir(null);
+    }, {passive:false});
+
+    sideEl.addEventListener('touchcancel', ()=>{ if (sideName==='left') leftDownId=null; else rightDownId=null;
       if (!leftDownId && !rightDownId) setDir(null);
     }, {passive:true});
   }
-  handleSide(left, 'left');
-  handleSide(right,'right');
+  bindSide(left,'left');
+  bindSide(right,'right');
 
-  // Jump (tap = saut / maintien = hauteur)
+  // Jump (tap / maintenir)
   btnJ.addEventListener('pointerdown', ev=>{
     ev.preventDefault(); jumpBuf = JUMP_BUFFER; jumpHeld = true;
   }, {passive:false});
   btnJ.addEventListener('pointerup',   ()=>{ jumpHeld = false; });
   btnJ.addEventListener('pointercancel',()=>{ jumpHeld = false; });
+  btnJ.addEventListener('touchstart',  e=>{ e.preventDefault(); jumpBuf=JUMP_BUFFER; jumpHeld=true; }, {passive:false});
+  btnJ.addEventListener('touchend',    ()=>{ jumpHeld=false; }, {passive:false});
+  btnJ.addEventListener('touchcancel', ()=>{ jumpHeld=false; });
 
   // Action (maintenir = tomber/hacker/entrer)
   let actionHeld = false;
   function actionDown(){ if (!actionHeld){ actionHeld = true; keys.add('s'); downPressedEdge = true; } }
   function actionUp(){   actionHeld = false; keys.delete('s'); }
   btnA.addEventListener('pointerdown', e=>{ e.preventDefault(); actionDown(); }, {passive:false});
-  btnA.addEventListener('pointerup',   actionUp, {passive:true});
-  btnA.addEventListener('pointercancel',actionUp, {passive:true});
+  btnA.addEventListener('pointerup',   actionUp);
+  btnA.addEventListener('pointercancel',actionUp);
+  btnA.addEventListener('touchstart',  e=>{ e.preventDefault(); actionDown(); }, {passive:false});
+  btnA.addEventListener('touchend',    actionUp, {passive:false});
+  btnA.addEventListener('touchcancel', actionUp);
 
-  // Afficher les contrôles uniquement APRÈS le START
+  // N'afficher les contrôles qu'après START
   const oldStart = window.__IO83_START__;
   window.__IO83_START__ = function(e){
     const r = oldStart && oldStart(e);
-    setTimeout(syncUI, 0); // re-check après disparition du gate
+    setTimeout(syncUI, 0);
     return r;
   };
 
-  // État initial
+  // Init
   syncUI();
 })();
 
