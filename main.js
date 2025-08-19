@@ -1095,38 +1095,6 @@ function drawNPCs(yOff){
 }
 
   
-
-  if (p.taking){
-    p.t += dt;
-    if (p.t >= COLLECT_DUR){
-      p.taking = false;
-      p.taken = true;
-      postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
-      setWanted();
-      if (sfx.wanted) sfx.wanted.play().catch(()=>{});
-
-// Posters → à 10/10 (une seule fois) : un seul son, pas de double « ding »
-if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
-  // on joue UNIQUEMENT le son dédié aux posters (pas le sfx_terminal_ding)
-  if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
-  ensureOverlay().style.display = 'grid';
-  postersCompleteShown = true;
-}
-      // Re-affichage "all_complete" à 11/10 + son (si jamais Absolute n'est pas déjà vrai)
-if (allCompleteShown && !allCompleteReshown && eggs >= 10 && postersCount >= 11 && !(eggs >= 11 && postersCount >= 11)) {
-  setTimeout(()=>{
-    ensureAllCompleteOverlay().style.display = 'grid';
-    playDing(); // on force le son ici
-  }, 3000);
-  allCompleteReshown = true;
-}
-
-
-    }
-  }
-}
-
-  
   
   function drawPosters(yOff){
     for(const p of posters){
