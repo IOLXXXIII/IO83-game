@@ -944,7 +944,8 @@ npcs.push({
   // 10% plus petit UNIQUEMENT pour maonis
   scale: (type === 'maonis' ? 0.9 : 1)
 });
-
+};
+    
 
     // Choix du PNJ de ce bloc (Aeron tôt, sinon Maonis/Kahikoans, et Kaito si bloc Kaito)
     const firstThird = Math.max(1, Math.floor(NUM_BLOCKS/3));
