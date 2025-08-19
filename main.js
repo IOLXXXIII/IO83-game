@@ -446,11 +446,156 @@ const images = {
   const AIR_JUMPS=1; let airJumpsUsed=0;
   const COYOTE_TIME=0.10, JUMP_BUFFER=0.12; let coyote=0, jumpBuf=0;
 
+
+  
+
+/* ===== MOBILE CONTROLS (left/right + JUMP + ACTION) ===== */
+(function mobileControls(){
+  if (!(navigator.maxTouchPoints > 0)) return; // desktop: ne rien faire
+
+  const left  = document.getElementById('touchLeft');
+  const right = document.getElementById('touchRight');
+  const btnJ  = document.getElementById('btnJump');
+  const btnA  = document.getElementById('btnAction');
+  if (!left || !right || !btnJ || !btnA) return;
+
+
+  // — charger tes PNG avec cache-busting ssi http(s)
+if (btnJ) btnJ.src = 'assets/ui/mobile/btn_jump.png'   + (IS_HTTP ? CB : '');
+if (btnA) btnA.src = 'assets/ui/mobile/btn_action.png' + (IS_HTTP ? CB : '');
+
+// activer l’UI après START (gardé tel quel)
+function enableUI(){ [left,right,btnJ,btnA].forEach(el=>{ el.style.pointerEvents='auto'; }); }
+
+// petit feedback visuel pressé
+const pressOn  = el => el && el.classList.add('pressed');
+const pressOff = el => el && el.classList.remove('pressed');
+
+btnJ.addEventListener('pointerdown', e=>{ e.preventDefault(); pressOn(btnJ); }, {passive:false});
+btnJ.addEventListener('pointerup',   ()=>pressOff(btnJ));
+btnJ.addEventListener('pointercancel',()=>pressOff(btnJ));
+
+btnA.addEventListener('pointerdown', e=>{ e.preventDefault(); pressOn(btnA); }, {passive:false});
+btnA.addEventListener('pointerup',   ()=>pressOff(btnA));
+btnA.addEventListener('pointercancel',()=>pressOff(btnA));
+
+
+  // Activés après le START pour ne pas gêner l'écran titre
+  function enableUI(){
+    [left,right,btnJ,btnA].forEach(el=>{
+      el.style.pointerEvents = 'auto';
+    });
+  }
+  // Appelé au premier démarrage
+  const _oldStart = window.__IO83_START__;
+  window.__IO83_START__ = function(e){ try{ enableUI(); }catch(_){ } return _oldStart(e); };
+
+  // État courant
+  let activeDir = null;          // 'left' | 'right' | null
+  let leftDownId = null, rightDownId = null;
+
+  // Double-tap côté gauche/droit
+  let lastTapUp = { left:0, right:0 };
+  const TAP_MAX_DUR = 200;       // ms max pour considérer un "tap"
+  const DOUBLE_TAP_GAP = 220;    // ms max entre deux taps
+  const TAP_MOVE_MAX = 12;       // px max de bougé pour rester un tap
+  const now = ()=>performance.now();
+
+  function setDir(dir){ // exclusif
+    if (dir === activeDir) return;
+    if (dir === 'left'){ keys.add('ArrowLeft'); keys.delete('ArrowRight'); }
+    else if (dir === 'right'){ keys.add('ArrowRight'); keys.delete('ArrowLeft'); }
+    else { keys.delete('ArrowLeft'); keys.delete('ArrowRight'); }
+    activeDir = dir;
+  }
+
+  function handleSide(sideEl, sideName){
+    let startX=0, startY=0, startT=0;
+    sideEl.addEventListener('pointerdown', ev=>{
+      if (ev.pointerType!=='touch' && ev.pointerType!=='pen') return;
+      ev.preventDefault();
+      if (sideName==='left'){
+        leftDownId = ev.pointerId;
+        setDir('left');
+      } else {
+        rightDownId = ev.pointerId;
+        setDir('right');
+      }
+      startX=ev.clientX; startY=ev.clientY; startT=now();
+    }, {passive:false});
+
+    sideEl.addEventListener('pointerup', ev=>{
+      if ((sideName==='left'  && ev.pointerId!==leftDownId) ||
+          (sideName==='right' && ev.pointerId!==rightDownId)) return;
+      ev.preventDefault();
+
+      const dt = now() - startT;
+      const dx = Math.abs(ev.clientX - startX);
+      const dy = Math.abs(ev.clientY - startY);
+      const isTap = (dt <= TAP_MAX_DUR && Math.max(dx,dy) <= TAP_MOVE_MAX);
+
+      // Double-tap → dash
+      const t = now();
+      if (isTap && (t - lastTapUp[sideName]) <= DOUBLE_TAP_GAP){
+        tryDash(sideName); // 'left' | 'right'
+      }
+      lastTapUp[sideName] = t;
+
+      // Gestion de la direction restante (exclusif)
+      if (sideName==='left'){ leftDownId=null; }
+      else { rightDownId=null; }
+
+      if (rightDownId!=null) setDir('right');
+      else if (leftDownId!=null) setDir('left');
+      else setDir(null);
+    }, {passive:false});
+
+    sideEl.addEventListener('pointercancel', ev=>{
+      if (sideName==='left')  leftDownId=null;
+      else                    rightDownId=null;
+      if (!leftDownId && !rightDownId) setDir(null);
+    }, {passive:true});
+  }
+
+  handleSide(left,  'left');
+  handleSide(right, 'right');
+
+  // --- JUMP (tap = saut / maintien = saut plus haut / re-tap = double saut) ---
+  btnJ.addEventListener('pointerdown', ev=>{
+    ev.preventDefault();
+    jumpBuf = JUMP_BUFFER;
+    jumpHeld = true;
+  }, {passive:false});
+  btnJ.addEventListener('pointerup',   ()=>{ jumpHeld = false; }, {passive:true});
+  btnJ.addEventListener('pointercancel',()=>{ jumpHeld = false; }, {passive:true});
+
+  // --- ACTION (maintenir pour tomber/hack) ---
+  let actionHeld = false;
+  function actionDown(){
+    if (actionHeld) return;
+    actionHeld = true;
+    keys.add('s');                 // veut dire "ArrowDown" dans ton code
+    downPressedEdge = true;        // edge pour drop-through sur toit
+  }
+  function actionUp(){
+    actionHeld = false;
+    keys.delete('s');
+  }
+  btnA.addEventListener('pointerdown', e=>{ e.preventDefault(); actionDown(); }, {passive:false});
+  btnA.addEventListener('pointerup',   ()=>{ actionUp(); }, {passive:true});
+  btnA.addEventListener('pointercancel',()=>{ actionUp(); }, {passive:true});
+})();
+
+  
+
+  
+  
   // Dash (2e dash dispo après 2e saut)
   const DASH_WINDOW=0.22, DASH_DUR=0.18, DASH_COOL_G=0.6, DASH_COOL_A=0.28, DASH_MULT=4;
   const NPC_MAONIS_RATE = 0.18; // 18% de Maonis (mets 0.10–0.25 selon ton goût)
   let lastTapL=-999,lastTapR=-999,dashTimer=0,dashCooldown=0,airDashUsed=0;
 
+  
   /* ========== Camera lookahead & micro shake ========== */
 const LOOKAHEAD_MAX = 0;     // px max
 const LOOK_SMOOTH   = 8;       // suivi (plus grand = plus rapide)
