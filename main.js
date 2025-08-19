@@ -1534,29 +1534,36 @@ if(!ensureCanvas()){
   return;
 }
 
-  loadAll().then(function(){
-    // On signale si des visuels minimum manquent, MAIS on lance quand même la boucle.
-    const missing = [
-      !(images.myoIdle && images.myoIdle[0]) ? 'images.myoIdle[0]' : null,
-      !images.front ? 'images.front (ground.png)' : null
-    ].filter(Boolean);
+  // --- Fast boot : démarre dès que le minimum vital est prêt ---
+let fastStarted = false;
+const fastTry = () => {
+  if (fastStarted) return;
+  if (assetsCruciauxOk()) {
+    fastStarted = true;
+    try {
+      recalcGround();
+      buildWorld();
+      worldReady = true;
+      if (gate) gate.style.display = 'none';
+      if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
+      requestAnimationFrame(loop);
+    } catch(e){ console.warn('[IO83] fast boot a échoué, on laisse le boot normal continuer.', e); }
+  }
+};
+const fastTimer = setInterval(fastTry, 50);
 
-    if (missing.length){
-      const note = document.getElementById('loadNote') || document.createElement('div');
-      note.id = 'loadNote';
-      Object.assign(note.style, {
-        position:'absolute', bottom:'12px', left:'12px', right:'12px',
-        font:'12px/1.4 system-ui', color:'#bbb', opacity:'0.9'
-      });
-      note.textContent = 'Chargement incomplet (fallback actif). Manque: ' + missing.join(', ');
-      gate.appendChild(note);
-      console.warn('[IO83] Fallback actif. Manque :', missing);
-    }
-
-    gate.style.display = 'none';
+loadAll().then(function(){
+  clearInterval(fastTimer);
+  if (!worldReady) {           // si le fast-boot n'a pas déjà lancé le jeu
+    recalcGround();
+    buildWorld();
+    worldReady = true;
+    if (gate) gate.style.display = 'none';
     if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
     requestAnimationFrame(loop);
-  });
+  }
+});
+
 
 }
 
