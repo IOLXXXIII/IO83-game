@@ -1082,15 +1082,18 @@ function drawNPCs(yOff){
     }
     ctx.restore();
 
-    // Bulle PNG : centrée au-dessus de la tête
-    if (n.show && n.dialogImg){
-      const scale = 0.72;
-      const bw = Math.round(n.dialogImg.width  * scale);
-      const bh = Math.round(n.dialogImg.height * scale);
-      const bx = Math.round(sx + dw/2 - bw/2);
-      const by = Math.round(sy - bh - 8);
-      ctx.drawImage(n.dialogImg, bx, by, bw, bh);
-    }
+// Bulle PNG : décalée vers la gauche et moins haute (comme l’exemple OK)
+if (n.show && n.dialogImg){
+  const scale = 0.72;
+  const bw = Math.round(n.dialogImg.width  * scale);
+  const bh = Math.round(n.dialogImg.height * scale);
+  // ← décale la bulle d’1/2 largeur vers la gauche
+  const bx = sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5);
+  // ← place la bulle plus bas (≈ moitié au-dessus de la tête, pas collée au plafond)
+  const by = sy - Math.round(bh*0.5);
+  ctx.drawImage(n.dialogImg, bx, by, bw, bh);
+}
+
   }
 }
 
