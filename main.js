@@ -662,6 +662,20 @@ let worldReady=false;
 function loadAll(){
   const L = (src)=>loadImg(src);
   const tasks = [];
+  // --- Seed minimal dialogs (fast) : 1 image par type qu'on voit tôt
+//    (déclenché AVANT le chargement complet/manifest pour garantir une bulle dispo au spawn)
+const DSEED = ['aeron','kahikoans']; // Aeron apparaît tôt, kahikoans très fréquents
+tasks.push(Promise.all(DSEED.map(function(t){
+  const url = `assets/ui/dialogs/${t}/dialog_${t}_01.png${CB}`;
+  return L(url).then(function(img){
+    if (img) {
+      if (!images.dialogs[t]) images.dialogs[t] = [];
+      if (!images.dialogs[t].length) images.dialogs[t].push(img); // au moins 1 bulle prête
+    }
+    return true;
+  }).catch(function(){ return true; });
+})));
+
   tasks.push(L(ASSETS.absoluteCompletePNG).then(i=>{ images.absoluteComplete = i; }).catch(()=>{}));
 
 
@@ -1516,17 +1530,22 @@ setEggs();
     requestAnimationFrame(loop);
   }
 
+  
 function assetsCruciauxOk(){
-  // Minimum vital pour pouvoir construire le monde SANS planter :
-  // 1) une frame idle de Myo (perso)
-  // 2) l'image du sol (front)
-  // 3) au moins UN "pair" de bâtiment chargé (pour le fallback dans buildWorld)
-  const okMyo    = !!(images.myoIdle && images.myoIdle[0]);
-  const okGround = !!images.front;
-  const okOneBld = !!(images.buildings && images.buildings.length &&
-                      images.buildings[0] && images.buildings[0][0]);
-  return okMyo && okGround && okOneBld;
+  // Démarrage "jouable" sans perturber le jeu :
+  // 1) perso affichable
+  // 2) sol affichable
+  // 3) au moins 1 sprite de bâtiment (pour buildWorld)
+  // 4) au moins 1 bulle prête pour Aeron ET pour Kahikoans (évite le "silence" des PNJ au départ)
+  const okMyo     = !!(images.myoIdle && images.myoIdle[0]);
+  const okGround  = !!images.front;
+  const okOneBld  = !!(images.buildings && images.buildings.length &&
+                       images.buildings[0] && images.buildings[0][0]);
+  const okDlgAer  = !!(images.dialogs && images.dialogs.aeron && images.dialogs.aeron.length);
+  const okDlgKahi = !!(images.dialogs && images.dialogs.kahikoans && images.dialogs.kahikoans.length);
+  return okMyo && okGround && okOneBld && okDlgAer && okDlgKahi;
 }
+
 
 
   
