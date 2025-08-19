@@ -2,7 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<style>
+  /* Panneau “tourne l’écran” (montré en portrait) */
+  #rotateHint{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+              background:#000a;color:#fff;font:600 20px/1.2 system-ui;z-index:99999}
+  @media (orientation:portrait){
+    #rotateHint{display:flex}
+    #game, #hud, #gate, #mobileHUD{display:none !important;} /* rien ne s'affiche en portrait */
+  }
+</style>
+
   <title>IO 83 – Myo Prototype</title>
 
   <!-- Preloads essentiels -->
@@ -83,6 +93,9 @@
     <img id="title2" src="assets/title/title_idle_2.png" alt="" />
   </div>
 
+<div id="rotateHint">Please rotate your device</div>
+
+  
 <!-- SPRITE START (2 images superposées animées en CSS) -->
 <div id="startSprite"
      onclick="window.__IO83_START__ && window.__IO83_START__(event)"
