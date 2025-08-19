@@ -1534,7 +1534,7 @@ if(!ensureCanvas()){
   return;
 }
 
-  // --- Fast boot : démarre dès que le minimum vital est prêt ---
+// --- Fast boot : démarre dès que le minimum vital est prêt ---
 let fastStarted = false;
 const fastTry = () => {
   if (fastStarted) return;
@@ -1551,6 +1551,7 @@ const fastTry = () => {
   }
 };
 const fastTimer = setInterval(fastTry, 50);
+
 
 loadAll().then(function(){
   clearInterval(fastTimer);
