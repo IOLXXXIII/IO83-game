@@ -932,6 +932,8 @@ function buildWorld(){
       const cx = (L+R)/2;
       const nx = Math.round(cx - npcW/2);
       npcs.push({ type, x:nx, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:-1 });
+      // ↓↓↓ 10% plus petit UNIQUEMENT pour maonis
+      scale: (type === 'maonis' ? 0.9 : 1)
     };
 
     // Choix du PNJ de ce bloc (Aeron tôt, sinon Maonis/Kahikoans, et Kaito si bloc Kaito)
@@ -1053,6 +1055,8 @@ function drawNPCs(yOff){
     const base = n.frames && n.frames[0];
     if (!base) continue;
 
+    const scale = (n.scale || 1);
+    const s  = (NPC_H * scale) / base.height;
     // Taille du sprite PNJ
     const s  = NPC_H / base.height;
     const dw = Math.round(base.width  * s);
