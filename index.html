@@ -115,6 +115,20 @@
   <img id="btnJump"   class="io-btn-img io-jump"   alt="Jump"   src="assets/ui/mobile/btn_jump.png">
   <img id="btnAction" class="io-btn-img io-action" alt="Action" src="assets/ui/mobile/btn_action.png">
 
+  
+<script>
+  (function(){
+    function start(e){ if (window.__IO83_START__) window.__IO83_START__(e); }
+    // 1er tap/clic n’importe où → start (en capture pour être sûr)
+    window.addEventListener('pointerdown', start, {once:true, capture:true, passive:false});
+    // et sur le gros bouton écran titre
+    document.getElementById('gate')?.addEventListener('click', start, {passive:false});
+  })();
+</script>
+
+
+
+  
   <script src="main.js" defer></script>
 </body>
 </html>
