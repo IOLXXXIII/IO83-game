@@ -662,9 +662,8 @@ let worldReady=false;
 function loadAll(){
   const L = (src)=>loadImg(src);
   const tasks = [];
-  // --- Seed minimal dialogs (fast) : 1 image par type qu'on voit tôt
-//    (déclenché AVANT le chargement complet/manifest pour garantir une bulle dispo au spawn)
-const DSEED = ['aeron','kahikoans']; // Aeron apparaît tôt, kahikoans très fréquents
+// --- Seed de 1 bulle par PNJ clé (chargées très tôt pour éviter le "vide" au début)
+const DSEED = ['aeron','kahikoans','kaito','maonis'];
 tasks.push(Promise.all(DSEED.map(function(t){
   const url = `assets/ui/dialogs/${t}/dialog_${t}_01.png${CB}`;
   return L(url).then(function(img){
@@ -675,6 +674,7 @@ tasks.push(Promise.all(DSEED.map(function(t){
     return true;
   }).catch(function(){ return true; });
 })));
+
 
   tasks.push(L(ASSETS.absoluteCompletePNG).then(i=>{ images.absoluteComplete = i; }).catch(()=>{}));
 
@@ -1532,66 +1532,88 @@ setEggs();
 
   
 function assetsCruciauxOk(){
-  // Démarrage "jouable" sans perturber le jeu :
-  // 1) perso affichable
-  // 2) sol affichable
-  // 3) au moins 1 sprite de bâtiment (pour buildWorld)
-  // 4) au moins 1 bulle prête pour Aeron ET pour Kahikoans (évite le "silence" des PNJ au départ)
-  const okMyo     = !!(images.myoIdle && images.myoIdle[0]);
-  const okGround  = !!images.front;
-  const okOneBld  = !!(images.buildings && images.buildings.length &&
-                       images.buildings[0] && images.buildings[0][0]);
-  const okDlgAer  = !!(images.dialogs && images.dialogs.aeron && images.dialogs.aeron.length);
-  const okDlgKahi = !!(images.dialogs && images.dialogs.kahikoans && images.dialogs.kahikoans.length);
-  return okMyo && okGround && okOneBld && okDlgAer && okDlgKahi;
+  // 1) perso et animations de base
+  const okMyoIdle = !!(images.myoIdle && images.myoIdle[0]);
+  const okMyoWalk = !!(images.myoWalk && images.myoWalk[0]);
+
+  // 2) décor/parallax + sol (pour GROUND_Y stable)
+  const okBG = !!(images.back && images.mid && images.front);
+
+  // 3) AU MOINS un "pair" de bâtiment (buildWorld nécessite un sprite)
+  const okOneBld = !!(images.buildings && images.buildings.length &&
+                      images.buildings[0] && images.buildings[0][0]);
+
+  // 4) mur de fin (évite un changement tardif de monde)
+  const okEndWall = !!(images.buildingWall && images.buildingWall[0]);
+
+  // 5) intérieur minimal (écran fermé + 1er frame d’ouverture)
+  const okInterior = !!(images.interiorClosedIdle && images.interiorClosedIdle[0] &&
+                        images.interiorOpens && images.interiorOpens[0]);
+
+  // 6) PNJ visibles tôt + au moins 1 bulle chacun
+  const okNPCAeron  = !!(images.npcs.aeron && images.npcs.aeron[0]);
+  const okNPCKahi   = !!(images.npcs.kahikoans && images.npcs.kahikoans[0]);
+  const okDlgAeron  = !!(images.dialogs.aeron && images.dialogs.aeron.length);
+  const okDlgKahi   = !!(images.dialogs.kahikoans && images.dialogs.kahikoans.length);
+
+  return okMyoIdle && okMyoWalk &&
+         okBG && okOneBld && okEndWall && okInterior &&
+         okNPCAeron && okNPCKahi && okDlgAeron && okDlgKahi;
 }
 
 
+  // ==== Garde de démarrage ====
+const MIN_BOOT_MS = 5000; // 5 s de LOADING minimum pour une UX parfaite
+let _bootStartTs = 0;
+let _gameStarted = false;
+
+function startGame(){
+  if (_gameStarted) return;
+  _gameStarted = true;
+
+  recalcGround();
+  buildWorld();
+  worldReady = true;
+
+  if (gate) gate.style.display = 'none';
+  if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
+  requestAnimationFrame(loop);
+}
+
 
   
-/* ========== Boot ========== */
 function boot(){
   if (startBtn) startBtn.disabled = true;
   if (window.gateUI && window.gateUI.showLoading) window.gateUI.showLoading();
 
-if(!ensureCanvas()){
-  if (startBtn) startBtn.disabled = false;
-  return;
+  if(!ensureCanvas()){
+    if (startBtn) startBtn.disabled = false;
+    return;
+  }
+
+  _bootStartTs = performance.now();
+
+  // Sonde rapide tant que les assets critiques ne sont pas prêts
+  const fastTimer = setInterval(()=>{
+    if (_gameStarted) { clearInterval(fastTimer); return; }
+    const enoughTime = (performance.now() - _bootStartTs) >= MIN_BOOT_MS;
+    if (enoughTime && assetsCruciauxOk()){
+      clearInterval(fastTimer);
+      startGame();
+    }
+  }, 100);
+
+  // Chargement complet
+  loadAll().then(function(){
+    clearInterval(fastTimer);
+    // Si tout est déjà prêt mais < 5 s, on complète l'attente
+    const left = Math.max(0, MIN_BOOT_MS - (performance.now() - _bootStartTs));
+    setTimeout(function(){
+      if (!_gameStarted) startGame();
+    }, left);
+  });
 }
 
-// --- Fast boot : démarre dès que le minimum vital est prêt ---
-let fastStarted = false;
-const fastTry = () => {
-  if (fastStarted) return;
-  if (assetsCruciauxOk()) {
-    fastStarted = true;
-    try {
-      recalcGround();
-      buildWorld();
-      worldReady = true;
-      if (gate) gate.style.display = 'none';
-      if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
-      requestAnimationFrame(loop);
-    } catch(e){ console.warn('[IO83] fast boot a échoué, on laisse le boot normal continuer.', e); }
-  }
-};
-const fastTimer = setInterval(fastTry, 50);
-
-
-loadAll().then(function(){
-  clearInterval(fastTimer);
-  if (!worldReady) {           // si le fast-boot n'a pas déjà lancé le jeu
-    recalcGround();
-    buildWorld();
-    worldReady = true;
-    if (gate) gate.style.display = 'none';
-    if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
-    requestAnimationFrame(loop);
-  }
-});
-
-
-}
 
 console.log('[IO83] main.js chargé ✔');
 
