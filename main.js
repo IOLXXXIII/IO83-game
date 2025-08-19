@@ -931,10 +931,20 @@ function buildWorld(){
       const npcW = 200;                 // largeur “logique” pour l’emprise au sol
       const cx = (L+R)/2;
       const nx = Math.round(cx - npcW/2);
-      npcs.push({ type, x:nx, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:-1 });
-      // ↓↓↓ 10% plus petit UNIQUEMENT pour maonis
-      scale: (type === 'maonis' ? 0.9 : 1)
-    };
+npcs.push({
+  type,
+  x: nx,
+  frames: images.npcs[type],
+  animT: 0,
+  face: 'right',
+  show: false,
+  hideT: 0,
+  dialogImg: null,
+  dialogIdx: -1,
+  // 10% plus petit UNIQUEMENT pour maonis
+  scale: (type === 'maonis' ? 0.9 : 1)
+});
+
 
     // Choix du PNJ de ce bloc (Aeron tôt, sinon Maonis/Kahikoans, et Kaito si bloc Kaito)
     const firstThird = Math.max(1, Math.floor(NUM_BLOCKS/3));
@@ -1055,15 +1065,14 @@ function drawNPCs(yOff){
     const base = n.frames && n.frames[0];
     if (!base) continue;
 
+    // — Taille PNJ (avec scale par PNJ : maonis = 0.9, sinon = 1)
     const scale = (n.scale || 1);
-    const s  = (NPC_H * scale) / base.height;
-    // Taille du sprite PNJ
-    const s  = NPC_H / base.height;
+    const s  = (NPC_H * scale) / base.height;   // ← une seule définition de s
     const dw = Math.round(base.width  * s);
     const dh = Math.round(base.height * s);
     const footPad = Math.round(dh * FOOT_PAD_RATIO);
 
-    // Position (n.x est la GAUCHE logique du PNJ)
+    // Position (n.x = GAUCHE logique du PNJ)
     const sx = Math.round(n.x - cameraX);
     const sy = (GROUND_Y + yOff) - dh + footPad;
 
@@ -1086,20 +1095,18 @@ function drawNPCs(yOff){
     }
     ctx.restore();
 
-// Bulle PNG : décalée vers la gauche et moins haute (comme l’exemple OK)
-if (n.show && n.dialogImg){
-  const scale = 0.72;
-  const bw = Math.round(n.dialogImg.width  * scale);
-  const bh = Math.round(n.dialogImg.height * scale);
-  // ← décale la bulle d’1/2 largeur vers la gauche
-  const bx = sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5);
-  // ← place la bulle plus bas (≈ moitié au-dessus de la tête, pas collée au plafond)
-  const by = sy - Math.round(bh*0.5);
-  ctx.drawImage(n.dialogImg, bx, by, bw, bh);
-}
-
+    // Bulle PNG : décalée vers la gauche et moins haute (comme l’exemple OK)
+    if (n.show && n.dialogImg){
+      const dlgScale = 0.72; // (renommé pour éviter toute confusion avec scale ci-dessus)
+      const bw = Math.round(n.dialogImg.width  * dlgScale);
+      const bh = Math.round(n.dialogImg.height * dlgScale);
+      const bx = sx + Math.round(dw/2 - bw*0.5) - Math.round(bw*0.5); // décalage gauche
+      const by = sy - Math.round(bh*0.5);                              // un peu plus bas
+      ctx.drawImage(n.dialogImg, bx, by, bw, bh);
+    }
   }
 }
+
 
   
   
