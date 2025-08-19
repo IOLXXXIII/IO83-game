@@ -28,6 +28,13 @@ html, body, #game { touch-action: none; } /* anti scroll/zoom sur mobile */
 #hint{ opacity:.75 }
 #eggs{ opacity:.9 }
 
+
+/* Empêche double-tap/pinch zoom sur tout ce qui capte le jeu */
+html, body, #game,
+.io-touch-half, .io-btn-img { touch-action: none; }
+
+
+
 /* Gate / Title plein écran centré */
 #gate{
   position:fixed; inset:0; display:grid; place-items:center;
