@@ -126,3 +126,9 @@ html, body, #game { touch-action: none; }
   }
 }
 
+
+/* Conteneur mobile */
+#mobileHUD{position:fixed;inset:auto 0 0 0; height:0; pointer-events:none; display:none; z-index:9999;}
+#mobileHUD img{pointer-events:auto; user-select:none; -webkit-user-drag:none;}
+/* Ex.: place tes deux <img> via style inline ou classes, comme tu veux */
+
