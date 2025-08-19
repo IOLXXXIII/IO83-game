@@ -51,19 +51,55 @@ window.addEventListener('error', function(ev){
   const rint=(a,b)=>Math.floor(rnd(a,b+1));
   const aabb=(ax,ay,aw,ah,bx,by,bw,bh)=>ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
 
-/* ========== Canvas (lazy init) ========== */
+
+
+  /* ========== Canvas (lazy init) ========== */
 let canvas = null;
 let ctx = null;
-const DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+
+// PERF mobile : limite la résolution interne pour éviter les lags
+const IS_COARSE = (window.matchMedia && matchMedia('(pointer:coarse)').matches) || (navigator.maxTouchPoints > 0);
+let DPR = (function(){
+  const raw = window.devicePixelRatio || 1;
+  // mobile: ≤ 1.33 ; desktop: ≤ 2 (évite 3/4 qui explosent le GPU)
+  return IS_COARSE ? Math.min(1.33, raw) : Math.min(2, raw);
+})();
 
 function resize(){
   if(!canvas || !ctx) return;
-  const w = 1280, h = 720;
-  canvas.width = w * DPR; 
-  canvas.height = h * DPR;
+  // Bases 16:9 : plus petites sur mobile → moins de pixels à dessiner
+  const MOBILE_W=960,  MOBILE_H=540;
+  const DESKTOP_W=1280, DESKTOP_H=720;
+  const w = IS_COARSE ? MOBILE_W : DESKTOP_W;
+  const h = IS_COARSE ? MOBILE_H : DESKTOP_H;
+
+  canvas.width  = Math.round(w * DPR);
+  canvas.height = Math.round(h * DPR);
+
   ctx.imageSmoothingEnabled = false;
   ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  // recalcule la hauteur du sol si la taille interne change
+  if (typeof recalcGround === 'function') recalcGround();
 }
+
+let resizeHooked = false;
+function ensureCanvas(){
+  if (canvas && ctx) return true;
+  const el = document.getElementById('game');
+  if(!el){ console.error('[IO83] Canvas #game introuvable'); return false; }
+  canvas = el;
+  try{
+    ctx = canvas.getContext('2d', {alpha:false});
+  }catch(e){}
+  if(!ctx) ctx = canvas.getContext('2d');
+  if(!ctx){ console.error('[IO83] Contexte 2D introuvable'); return false; }
+  resize();
+  if(!resizeHooked){ addEventListener('resize', resize); resizeHooked = true; }
+  return true;
+}
+
+
 
 let resizeHooked = false;
 function ensureCanvas(){
@@ -305,7 +341,9 @@ function playDing(){
 
   
   /* ========== Parallax / Ground ========== */
-  const VIEW_DEN={back:6, mid:6, front:6};
+  // Layers un peu moins larges sur mobile → draw moins coûteux
+const VIEW_DEN = IS_COARSE ? { back:4, mid:4, front:4 } : { back:6, mid:6, front:6 };
+
   let cameraX=0, camYOffset=0;
   let GROUND_SRC_OFFSET = 18;
 try{
@@ -1714,13 +1752,40 @@ setEggs();
   }
 }
 
+  
+function loop(ts){
+  const dt = Math.min((ts - (loop.last || ts)) / 1000, 1/30);
+  loop.last = ts;
 
-  function loop(ts){ const dt=Math.min((ts-(loop.last||ts))/1000,1/30); loop.last=ts;
-    if(!worldReady){ ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR); requestAnimationFrame(loop); return; }
-    if(mode==='world') updateWorld(dt); else updateInterior(dt);
-    requestAnimationFrame(loop);
+  // Auto-downgrade (mobile) : si FPS < 50, on baisse un peu le DPR (jusqu'à 1.0)
+  if (IS_COARSE){
+    loop._acc    = (loop._acc    || 0) + dt;
+    loop._frames = (loop._frames || 0) + 1;
+    if (loop._acc >= 1.0){
+      const fps = loop._frames / loop._acc;
+      if (fps < 50 && DPR > 1.0){
+        DPR = Math.max(1.0, DPR - 0.15);
+        resize();
+      }
+      loop._acc = 0; loop._frames = 0;
+    }
   }
 
+  if (!worldReady){
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  if (mode === 'world') updateWorld(dt);
+  else                  updateInterior(dt);
+
+  requestAnimationFrame(loop);
+}
+
+
+  
 function assetsCruciauxOk(){
   // Il faut au minimum : 1 frame idle de Myo + le ground (devant).
   const okMyo    = !!(images.myoIdle && images.myoIdle[0]);
