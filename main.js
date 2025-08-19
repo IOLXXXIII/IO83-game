@@ -463,9 +463,6 @@ function addShake(s){ shakeAmp = Math.min(6, shakeAmp + s); }
 const DASH_TRAIL_FPS = 8; // ~10–11% plus lent que 9
   const DASH_TRAIL_VIS = 0.32; // durée d’affichage du trail en secondes
 let dashTrailT = 0;          // compte à rebours du trail
-  /* Tempo de rotation des bulles PNJ (en secondes) */
-const DIALOG_ADVANCE_SECS = 2.6;
-
 
 
 
@@ -717,19 +714,22 @@ function loadAll(){
     );
   }
 
-  // Fallback dialogs sans manifest (file:// ou manifest absent) : charge 01/02 par défaut
+// Fallback dialogs sans manifest : essaie dialog_01..dialog_20
 tasks.push((async ()=>{
   const types = ['aeron','kaito','maonis','kahikoans'];
   for (const t of types){
-    if (images.dialogs[t] && images.dialogs[t].length) continue; // déjà remplis via manifest
-    const guess = [
-      `assets/ui/dialogs/${t}/dialog_${t}_01.png${CB}`,
-      `assets/ui/dialogs/${t}/dialog_${t}_02.png${CB}`
-    ];
-    const arr = (await Promise.all(guess.map(L))).filter(Boolean);
-    images.dialogs[t] = arr; // peut être [] si rien n’existe, mais on essaye.
+    if (images.dialogs[t] && images.dialogs[t].length) continue;
+    const arr = [];
+    for (let i=1; i<=20; i++){
+      const n = String(i).padStart(2,'0');
+      const url = `assets/ui/dialogs/${t}/dialog_${t}_${n}.png${CB}`;
+      const img = await L(url);
+      if (img) arr.push(img);
+    }
+    images.dialogs[t] = arr;
   }
 })());
+
 
 
   // Bâtiments (4 types)
@@ -931,7 +931,7 @@ function buildWorld(){
       const npcW = 200;                 // largeur “logique” pour l’emprise au sol
       const cx = (L+R)/2;
       const nx = Math.round(cx - npcW/2);
-      npcs.push({ type, x:nx, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:0 });
+      npcs.push({ type, x:nx, frames:images.npcs[type], animT:0, face:'right', show:false, hideT:0, dialogImg:null, dialogIdx:-1 });
     };
 
     // Choix du PNJ de ce bloc (Aeron tôt, sinon Maonis/Kahikoans, et Kaito si bloc Kaito)
@@ -1038,6 +1038,8 @@ function drawMyo(runVel,yOff,H=MYO_H){
 
 
   
+
+  
   function drawBuildings(yOff){
     for(const b of buildings){
       const sx=Math.floor(b.x - cameraX); if(sx<-2200 || sx>canvas.width/DPR+2200) continue;
@@ -1046,28 +1048,53 @@ function drawMyo(runVel,yOff,H=MYO_H){
     }
   }
 
+function drawNPCs(yOff){
+  for (const n of npcs){
+    const base = n.frames && n.frames[0];
+    if (!base) continue;
 
-  
-    // PNJ talk
-    for(const n of npcs){
-      const near=Math.abs(player.x-n.x)<=NPC_TALK_RADIUS;
-      if(near){ n.show=true; n.hideT=0; }
-      else if(n.show){ n.hideT=(n.hideT||0)+dt; if(n.hideT>=NPC_HIDE_DELAY){ n.show=false; n.dialogImg=null; n.hideT=0; } }
+    // Taille du sprite PNJ
+    const s  = NPC_H / base.height;
+    const dw = Math.round(base.width  * s);
+    const dh = Math.round(base.height * s);
+    const footPad = Math.round(dh * FOOT_PAD_RATIO);
+
+    // Position (n.x est la GAUCHE logique du PNJ)
+    const sx = Math.round(n.x - cameraX);
+    const sy = (GROUND_Y + yOff) - dh + footPad;
+
+    // Orientation vers le joueur
+    const npcCenter = n.x + dw/2;
+    if (player.x < npcCenter - NPC_TURN_HYST)      n.face = 'left';
+    else if (player.x > npcCenter + NPC_TURN_HYST) n.face = 'right';
+
+    const img = n.frames[Math.floor((n.animT || 0) * 2) % 2] || base;
+
+    // Dessin du PNJ
+    ctx.save();
+    if (n.face === 'left'){
+      ctx.translate(sx + dw/2, sy);
+      ctx.scale(-1, 1);
+      ctx.translate(-dw/2, 0);
+      ctx.drawImage(img, 0, 0, dw, dh);
+    } else {
+      ctx.drawImage(img, sx, sy, dw, dh);
     }
+    ctx.restore();
+
+    // Bulle PNG : centrée au-dessus de la tête
+    if (n.show && n.dialogImg){
+      const scale = 0.72;
+      const bw = Math.round(n.dialogImg.width  * scale);
+      const bh = Math.round(n.dialogImg.height * scale);
+      const bx = Math.round(sx + dw/2 - bw/2);
+      const by = Math.round(sy - bh - 8);
+      ctx.drawImage(n.dialogImg, bx, by, bw, bh);
+    }
+  }
+}
 
   
-// Posters
-const wantsDown = keys.has('ArrowDown') || keys.has('s');
-for (const p of posters){
-  const center = p.x + p.w/2;
-  const dx = Math.abs(player.x - center);
-  const feetY = GROUND_Y - 110 + player.y;
-  const over = aabb(player.x-26, feetY, 52, 110, p.x, p.y, p.w, p.h);
-
-  if (!p.taken && !p.taking && dx <= COLLECT_RADIUS && over && wantsDown){
-    p.taking = true; 
-    p.t = 0;
-  }
 
   if (p.taking){
     p.t += dt;
@@ -1238,39 +1265,85 @@ if(!wasOnGround && player.onGround){
 }
 
 
-// PNJ talk : avance d'UNE bulle à chaque apparition (pas de défilement en continu)
+// PNJ talk : SANS tempo → à chaque entrée dans la zone, bulle suivante (boucle)
 for (const n of npcs){
   const near = Math.abs(player.x - n.x) <= NPC_TALK_RADIUS;
-  const list = images.dialogs[n.type];
+  const list = images.dialogs[n.type] || [];
 
   if (near){
     if (!n.show){
-      // Le joueur vient d'entrer dans le rayon → on avance d'une bulle
+      // entrée dans le rayon → bulle suivante (boucle complète)
       n.show = true;
       n.hideT = 0;
-      if (list && list.length){
-        n.dialogIdx = ((n.dialogIdx|0) + 1) % list.length; // +1 par apparition
+      if (list.length){
+        if (typeof n.dialogIdx !== 'number') n.dialogIdx = -1;
+        n.dialogIdx = (n.dialogIdx + 1) % list.length; // -1 → 0 à la première entrée
         n.dialogImg = list[n.dialogIdx];
       } else {
-        n.dialogImg = null; // pas de PNG → rien
+        n.dialogImg = null;
       }
     } else {
-      // toujours dans le rayon → on garde la même bulle
+      // on reste dans le rayon → on garde la même bulle
       n.hideT = 0;
     }
   } else if (n.show){
-    // on quitte le rayon → on masque après un court délai
+    // sortie du rayon → masquage après un court délai
     n.hideT = (n.hideT || 0) + dt;
     if (n.hideT >= NPC_HIDE_DELAY){
       n.show = false;
-      n.dialogImg = null;
       n.hideT = 0;
-      // On ne remet PAS dialogIdx à zéro → prochaine apparition = bulle suivante
+      n.dialogImg = null;
+      // on conserve n.dialogIdx pour reprendre à la suivante à la prochaine entrée
+    }
+  }
+}
+
+    
+
+// Posters (collecte)
+const wantsDown = keys.has('ArrowDown') || keys.has('s');
+for (const p of posters){
+  const center = p.x + p.w/2;
+  const dx = Math.abs(player.x - center);
+  const feetY = GROUND_Y - 110 + player.y;
+  const over = aabb(player.x-26, feetY, 52, 110, p.x, p.y, p.w, p.h);
+
+  if (!p.taken && !p.taking && dx <= COLLECT_RADIUS && over && wantsDown){
+    p.taking = true;
+    p.t = 0;
+  }
+
+  if (p.taking){
+    p.t += dt;
+    if (p.t >= COLLECT_DUR){
+      p.taking = false;
+      p.taken = true;
+      postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
+      setWanted();
+      if (sfx.wanted) sfx.wanted.play().catch(()=>{});
+
+      // Posters → à 10/10 (une seule fois) : un seul son, pas de double « ding »
+      if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
+        if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
+        ensureOverlay().style.display = 'grid';
+        postersCompleteShown = true;
+      }
+
+      // Re-affichage "all_complete" à 11/10 + son (si Absolute pas vrai)
+      if (allCompleteShown && !allCompleteReshown && eggs >= 10 && postersCount >= 11 && !(eggs >= 11 && postersCount >= 11)) {
+        setTimeout(()=>{
+          ensureAllCompleteOverlay().style.display = 'grid';
+          playDing();
+        }, 3000);
+        allCompleteReshown = true;
+      }
     }
   }
 }
 
 
+
+    
     // Portes
     if(wantsDown && !onPlatform && dropThrough<=0){
       for(const b of buildings){
