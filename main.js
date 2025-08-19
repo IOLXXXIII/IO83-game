@@ -101,23 +101,6 @@ function ensureCanvas(){
 
 
 
-let resizeHooked = false;
-function ensureCanvas(){
-  if (canvas && ctx) return true;
-  const el = document.getElementById('game');
-  if(!el){ console.error('[IO83] Canvas #game introuvable'); return false; }
-  canvas = el;
-  try{
-    ctx = canvas.getContext('2d', {alpha:false});
-  }catch(e){}
-  if(!ctx) ctx = canvas.getContext('2d');
-  if(!ctx){ console.error('[IO83] Contexte 2D introuvable'); return false; }
-  resize();
-  if(!resizeHooked){ addEventListener('resize', resize); resizeHooked = true; }
-  return true;
-}
-
-
 
 /* ========== Gate / HUD ========== */
 const gate = document.getElementById('gate');
