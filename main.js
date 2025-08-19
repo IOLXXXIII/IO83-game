@@ -1042,53 +1042,44 @@ function drawMyo(runVel,yOff,H=MYO_H){
     }
   }
 
+
   
-  
-function drawNPCs(yOff){
-  for (const n of npcs){
-    const base = n.frames[0];
-    if (!base) continue;
-
-    // Taille et position du sprite PNJ
-    const s = NPC_H / base.height;
-    const dw = Math.round(base.width * s);
-    const dh = Math.round(base.height * s);
-    const footPad = Math.round(dh * FOOT_PAD_RATIO);
-    const sy = (GROUND_Y + yOff) - dh + footPad;
-    const sx = Math.floor(n.x - cameraX);
-
-    // Orientation vers le joueur (garde le code existant)
-    const npcCenter = n.x + dw / 2;
-    if (player.x < npcCenter - NPC_TURN_HYST)      n.face = 'left';
-    else if (player.x > npcCenter + NPC_TURN_HYST) n.face = 'right';
-
-    const img = n.frames[Math.floor(n.animT * 2) % 2] || base;
-
-    // Dessin du PNJ
-    ctx.save();
-    if (n.face === 'left'){
-      ctx.translate(sx + dw/2, sy);
-      ctx.scale(-1, 1);
-      ctx.translate(-dw/2, 0);
-      ctx.drawImage(img, 0, 0, dw, dh);
-    } else {
-      ctx.drawImage(img, sx, sy, dw, dh);
+    // PNJ talk
+    for(const n of npcs){
+      const near=Math.abs(player.x-n.x)<=NPC_TALK_RADIUS;
+      if(near){ n.show=true; n.hideT=0; }
+      else if(n.show){ n.hideT=(n.hideT||0)+dt; if(n.hideT>=NPC_HIDE_DELAY){ n.show=false; n.dialogImg=null; n.hideT=0; } }
     }
-    ctx.restore();
 
-    // ---- ICI : UNIQUEMENT TES PNG DE BULLES ----
-    // On n'affiche une bulle QUE si n.show est vrai ET que n.dialogImg existe.
-    // Aucune “bulle fallback” n’est dessinée.
-    if (n.show && n.dialogImg){
-      const scale = 0.72;
-      const bw = n.dialogImg.width * scale;
-      const bh = n.dialogImg.height * scale;
+// Posters
+const wantsDown = keys.has('ArrowDown') || keys.has('s');
+for (const p of posters){
+  const center = p.x + p.w/2;
+  const dx = Math.abs(player.x - center);
+  const feetY = GROUND_Y - 110 + player.y;
+  const over = aabb(player.x-26, feetY, 52, 110, p.x, p.y, p.w, p.h);
 
-      // Centrer la bulle au-dessus du PNJ
-      const bx = sx + Math.round(dw / 2 - bw / 2);
-      const by = sy - Math.round(bh * 0.5);
+  if (!p.taken && !p.taking && dx <= COLLECT_RADIUS && over && wantsDown){
+    p.taking = true; 
+    p.t = 0;
+  }
 
-      ctx.drawImage(n.dialogImg, bx, by, bw, bh);
+  if (p.taking){
+    p.t += dt;
+    if (p.t >= COLLECT_DUR){
+      p.taking = false;
+      p.taken = true;
+      postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
+      setWanted();
+      if (sfx.wanted) sfx.wanted.play().catch(()=>{});
+
+      // Posters → à 10/10 (une seule fois)
+      if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
+        if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
+        ensureOverlay().style.display = 'grid';
+        playDing();
+        postersCompleteShown = true;
+      }
     }
   }
 }
