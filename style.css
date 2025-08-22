@@ -76,8 +76,8 @@ html,body{
 /* Sprite LOADING (bas-droite, caché au départ) */
 #loadingImg{
   position:absolute;
-  right:100px; bottom:100px;
-  width:160px; height:65px;
+  right:200px; bottom:200px;
+  width:120px; height:49px;
   image-rendering:pixelated;
   pointer-events:none;
   user-select:none;
