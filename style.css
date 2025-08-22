@@ -74,18 +74,18 @@ html,body{
 
 
 /* Sprite LOADING (bas-droite, caché au départ) */
-#loadingImg {
+#loadingImg{
   position:absolute !important;
-  right:100px !important;
-  bottom:100px !important;
+  right:200px !important;
+  bottom:200px !important;
   width:120px !important;   /* –40% */
   height:49px !important;   /* –40% */
   image-rendering:pixelated !important;
   pointer-events:none !important;
   user-select:none !important;
-  display:none !important;  /* le JS basculera en block */
   z-index:10 !important;
-  filter: brightness(0.5) !important;
+  filter:brightness(0.5) !important;
+  /* PAS de display ici → le JS gère l’affichage */
 }
 
 
