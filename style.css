@@ -83,6 +83,7 @@ html,body{
   user-select:none;
   display:none;
   z-index:10;
+  filter: brightness(0.7); /* assombri sans changer le PNG */
 }
 
 /* Bouton HTML de secours toujours masqué (on garde le handler JS) */
