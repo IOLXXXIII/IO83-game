@@ -75,19 +75,17 @@ html,body{
 
 /* Sprite LOADING (bas-droite, caché au départ) */
 #loadingImg{
-  position:absolute !important;
-  right:200px !important;
-  bottom:200px !important;
-  width:120px !important;   /* –40% */
-  height:49px !important;   /* –40% */
-  image-rendering:pixelated !important;
-  pointer-events:none !important;
-  user-select:none !important;
-  z-index:10 !important;
-  filter:brightness(0.5) !important;
-  /* PAS de display ici → le JS gère l’affichage */
+  position:absolute;
+  right:200px;           /* décale bien à gauche */
+  bottom:200px;          /* plus haut */
+  width:120px;           /* –40% de 200px */
+  height:49px;           /* –40% de 81px */
+  image-rendering:pixelated;
+  pointer-events:none;
+  user-select:none;
+  z-index:10;
+  filter:brightness(0.5);
 }
-
 
 
 
