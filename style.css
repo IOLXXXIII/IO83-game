@@ -74,19 +74,20 @@ html,body{
 
 
 /* Sprite LOADING (bas-droite, caché au départ) */
-#loadingImg{
-  position:absolute;
-  right:100vw;           /* responsive : 5% de la largeur écran */
-  bottom:100vh;          /* responsive : 5% de la hauteur écran */
-  width:120px;         /* –40% par rapport à 200px */
-  height:49px;         /* –40% par rapport à 81px */
-  image-rendering:pixelated;
-  pointer-events:none;
-  user-select:none;
-  display:none;
-  z-index:10;
-  filter: brightness(0.3); /* assombri sans changer le PNG */
+#loadingImg {
+  position:absolute !important;
+  right:200px !important;
+  bottom:200px !important;
+  width:120px !important;   /* –40% */
+  height:49px !important;   /* –40% */
+  image-rendering:pixelated !important;
+  pointer-events:none !important;
+  user-select:none !important;
+  display:none !important;  /* le JS basculera en block */
+  z-index:10 !important;
+  filter: brightness(0.5) !important;
 }
+
 
 
 
