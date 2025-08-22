@@ -76,14 +76,14 @@ html,body{
 /* Sprite LOADING (bas-droite, caché au départ) */
 #loadingImg{
   position:absolute;
-  right:50px; bottom:50px;
-  width:170px; height:69px;
+  right:100px; bottom:100px;
+  width:160px; height:65px;
   image-rendering:pixelated;
   pointer-events:none;
   user-select:none;
   display:none;
   z-index:10;
-  filter: brightness(0.7); /* assombri sans changer le PNG */
+  filter: brightness(0.5); /* assombri sans changer le PNG */
 }
 
 /* Bouton HTML de secours toujours masqué (on garde le handler JS) */
