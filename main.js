@@ -812,6 +812,8 @@ function buildWorld(){
   const INTER_GAP_MIN = 320;           // écart entre blocs (rendu compact mais safe)
   const INTER_GAP_MAX = 560;
 
+  const GAP_SCALE = 1.10; // +10% d'écartement
+
   // Bloc Kaito (0-based) : Kaito + son bâtiment dans le même bloc
   const KAITO_BLOCK = Math.min(5, NUM_BLOCKS-1);
 
@@ -895,12 +897,12 @@ function buildWorld(){
         const role = gapRoles[i]; // 'poster' ou 'npc'
         const minW = (role==='poster') ? GAP_POSTER_MIN : GAP_NPC_MIN;
         const maxW = (role==='poster') ? GAP_POSTER_MAX : GAP_NPC_MAX;
-        const gapW = rint(minW, maxW);
+        const gapW = Math.round(rint(minW, maxW) * GAP_SCALE);
         x = bx + dw + gapW; // on crée réellement la place
       }
       else{
         // Fin du bloc → gap inter-bloc
-        x += rint(INTER_GAP_MIN, INTER_GAP_MAX);
+        x += Math.round(rint(INTER_GAP_MIN, INTER_GAP_MAX) * GAP_SCALE);
       }
     }
 
