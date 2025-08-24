@@ -210,39 +210,32 @@ try{
 }catch(_){}
 
 // ——— HUD moderne : légende centrée + panneau score top-right ———
-function installHUD(){
+let scoreWantedUI = null, scoreEggUI = null; // utilisés par setWanted/setEggs
 
-(function(){
+function installHUD(){
   const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
 
   // — Score panel (fond PNG + deux compteurs) —
   const panel = document.createElement('div');
   panel.id = 'scorePanel';
-  // Taille par défaut (ajuste seulement ces 2 nombres si tu veux)
-  const PANEL_W = 420, PANEL_H = 94;
+  const PANEL_W = 420, PANEL_H = 94; // taille logique; PNG 870×187 OK
   panel.style.cssText = [
     'position:fixed','top:18px','right:24px',
-    `width:${PANEL_W}px`, `height:${PANEL_H}px`,
+    `width:${PANEL_W}px`,`height:${PANEL_H}px`,
     'background-repeat:no-repeat','background-position:center','background-size:contain',
     'image-rendering:pixelated','pointer-events:none','z-index:60',
-    'display:flex','align-items:center','justify-content:space-between',
-    'padding:0 56px','font:18px/1.1 system-ui','text-shadow:0 1px 0 rgba(0,0,0,.25)'
+    'display:grid','grid-template-columns:1fr 1fr','place-items:center',
+    'padding:0 62px','font:18px/1.1 system-ui','text-shadow:0 1px 0 rgba(0,0,0,.25)',
+    'text-align:center'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
-  // Centre chaque libellé au milieu de sa moitié (comme sur ta ref)
-  panel.style.display = 'grid';
-  panel.style.gridTemplateColumns = '1fr 1fr';
-  panel.style.placeItems = 'center';
-  panel.style.justifyContent = 'unset'; // remplace le space-between
-  panel.style.padding = '0 62px';       // marge interne du PNG (ajuste si besoin)
-  panel.style.textAlign = 'center';
 
   const want = document.createElement('span');
   const egg  = document.createElement('span');
-  function makeLabel(el, label, id){
+  const makeLabel = (el, label, id) => {
     el.style.whiteSpace = 'nowrap';
     el.innerHTML = `${label} <b id="${id}" style="color:${counterColor}">0/10</b>`;
-  }
+  };
   makeLabel(want, 'Wanted:', 'uiWantedNum');
   makeLabel(egg , '???',     'uiEggNum');
   panel.appendChild(want);
