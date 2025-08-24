@@ -209,6 +209,63 @@ try{
   if (eggsDiv) eggsDiv.style.removeProperty('color'); // laisse "???" en couleur par défaut
 }catch(_){}
 
+// ——— HUD moderne : légende centrée + panneau score top-right ———
+let scoreWantedUI = null, scoreEggUI = null;
+
+(function(){
+  const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
+
+  // — Score panel (fond PNG + deux compteurs) —
+  const panel = document.createElement('div');
+  panel.id = 'scorePanel';
+  // Taille par défaut (ajuste seulement ces 2 nombres si tu veux)
+  const PANEL_W = 420, PANEL_H = 94;
+  panel.style.cssText = [
+    'position:fixed','top:18px','right:24px',
+    `width:${PANEL_W}px`, `height:${PANEL_H}px`,
+    'background-repeat:no-repeat','background-position:center','background-size:contain',
+    'image-rendering:pixelated','pointer-events:none','z-index:60',
+    'display:flex','align-items:center','justify-content:space-between',
+    'padding:0 56px','font:18px/1.1 system-ui','text-shadow:0 1px 0 rgba(0,0,0,.25)'
+  ].join(';');
+  panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
+
+  const want = document.createElement('span');
+  const egg  = document.createElement('span');
+  function makeLabel(el, label, id){
+    el.style.whiteSpace = 'nowrap';
+    el.innerHTML = `${label} <b id="${id}" style="color:${counterColor}">0/10</b>`;
+  }
+  makeLabel(want, 'Wanted:', 'uiWantedNum');
+  makeLabel(egg , '???',     'uiEggNum');
+  panel.appendChild(want);
+  panel.appendChild(egg);
+  document.body.appendChild(panel);
+
+  scoreWantedUI = panel.querySelector('#uiWantedNum');
+  scoreEggUI    = panel.querySelector('#uiEggNum');
+
+  // — Masque l’ancien HUD si présent —
+  try{
+    if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display = 'none';
+    const oldEggs = document.getElementById('eggs');
+    if (oldEggs) oldEggs.style.display = 'none';
+  }catch(_){}
+
+  // — Légende (contrôles) top-center —
+  const legend = document.createElement('div');
+  legend.id = 'io83Legend';
+  legend.style.cssText = [
+    'position:fixed','top:18px','left:50%','transform:translateX(-50%)',
+    'z-index:55','pointer-events:none','opacity:.95',
+    'display:flex','gap:28px','align-items:center',
+    'font:16px/1.2 system-ui','color:#111',
+    'text-shadow:0 1px 0 rgba(255,255,255,.35),0 -1px 0 rgba(0,0,0,.05)'
+  ].join(';');
+  const mk = t => { const s=document.createElement('span'); s.textContent=t; return s; };
+  legend.append( mk('← → move'), mk('↑ jump'), mk('×2 → dash'), mk('↓ interact') );
+  document.body.appendChild(legend);
+})();
 
 
   // Variables utilisées par checkAllComplete (déclarées AVANT toute utilisation)
@@ -230,11 +287,13 @@ try{
 
   const setWanted = () => {
     if (scoreEl) scoreEl.textContent = `${postersCount}/10`;
+    if (scoreWantedUI) scoreWantedUI.textContent = `${postersCount}/10`;
     checkAllComplete();
     checkAbsoluteComplete(); // ← ajout
   };
   const setEggs = () => {
     if (eggBox) eggBox.textContent = `${eggs}/10`;
+    if (scoreEggUI) scoreEggUI.textContent = `${eggs}/10`;
     checkAllComplete();
     checkAbsoluteComplete(); // ← ajout
   };
@@ -407,6 +466,7 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
     allCompletePNG:'assets/collectibles/all_complete.png'+CB,
     absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB,
     helperPNG:'assets/collectibles/helper.png'+CB,
+    scorePanelPNG:'assets/ui/hud/score_panel.png'+CB,
     uiStart:   ['assets/ui/start/start_idle_1.png'+CB, 'assets/ui/start/start_idle_2.png'+CB],
     uiLoading: Array.from({length:5}, (_,i)=>`assets/ui/loading/loading_idle_${i+1}.png${CB}`),
 
