@@ -209,35 +209,48 @@ try{
   if (eggsDiv) eggsDiv.style.removeProperty('color'); // laisse "???" en couleur par défaut
 }catch(_){}
 
+
+
+  
 // ——— HUD moderne : légende centrée + panneau score top-right ———
 let scoreWantedUI = null, scoreEggUI = null; // utilisés par setWanted/setEggs
 
 function installHUD(){
+  const PANEL_TOP = 18;
+  const PANEL_RIGHT = 24;
+  const PANEL_W = 420, PANEL_H = 94;
+
   const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
 
   // — Score panel (fond PNG + deux compteurs) —
   const panel = document.createElement('div');
   panel.id = 'scorePanel';
-  const PANEL_W = 420, PANEL_H = 94; // taille logique; PNG 870×187 OK
   panel.style.cssText = [
-    'position:fixed','top:18px','right:24px',
-    `width:${PANEL_W}px`,`height:${PANEL_H}px`,
+    'position:fixed', `top:${PANEL_TOP}px`, `right:${PANEL_RIGHT}px`,
+    `width:${PANEL_W}px`, `height:${PANEL_H}px`,
     'background-repeat:no-repeat','background-position:center','background-size:contain',
     'image-rendering:pixelated','pointer-events:none','z-index:60',
+    // grille 2 colonnes, centrage parfait H/V de chaque cellule
     'display:grid','grid-template-columns:1fr 1fr','place-items:center',
-    'padding:0 62px','font:18px/1.1 system-ui','text-shadow:0 1px 0 rgba(0,0,0,.25)',
+    'padding:0 62px','font:18px/1.1 system-ui',
+    'text-shadow:0 1px 0 rgba(0,0,0,.25)', // ombre sombre uniquement
     'text-align:center'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
 
   const want = document.createElement('span');
   const egg  = document.createElement('span');
+
+  // Couleur des libellés (marron) + chiffres en jaune
+  const labelColor = '#7a3f12';
   const makeLabel = (el, label, id) => {
     el.style.whiteSpace = 'nowrap';
+    el.style.color = labelColor;       // ← Wanted / ??? en marron
     el.innerHTML = `${label} <b id="${id}" style="color:${counterColor}">0/10</b>`;
   };
   makeLabel(want, 'Wanted:', 'uiWantedNum');
   makeLabel(egg , '???',     'uiEggNum');
+
   panel.appendChild(want);
   panel.appendChild(egg);
   document.body.appendChild(panel);
@@ -252,15 +265,19 @@ function installHUD(){
     if (oldEggs) oldEggs.style.display = 'none';
   }catch(_){}
 
-  // — Légende (contrôles) top-center —
+  // — Légende (contrôles) centrée ET alignée en hauteur avec le centre du panneau —
   const legend = document.createElement('div');
   legend.id = 'io83Legend';
   legend.style.cssText = [
-    'position:fixed','top:18px','left:50%','transform:translateX(-50%)',
+    'position:fixed',
+    // centre vertical exactement sur la même "ligne d’horizon" que Wanted/???
+    `top:${PANEL_TOP + Math.round(PANEL_H/2)}px`,
+    'left:50%','transform:translate(-50%,-50%)',
     'z-index:55','pointer-events:none','opacity:.95',
     'display:flex','gap:28px','align-items:center',
-    'font:16px/1.2 system-ui','color:#111',
-    'text-shadow:0 1px 0 rgba(255,255,255,.35),0 -1px 0 rgba(0,0,0,.05)'
+    'font:16px/1.2 system-ui',
+    'color:#000',                           // noir
+    'text-shadow:0 -1px 0 rgba(0,0,0,.45)'  // garde le marquage noir UNIQUEMENT
   ].join(';');
   const mk = t => { const s=document.createElement('span'); s.textContent=t; return s; };
   legend.append( mk('← → move'), mk('↑ jump'), mk('×2 → dash'), mk('↓ interact') );
@@ -472,8 +489,8 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
 
   };
 
-  // HUD : création après init d’ASSETS (évite la TDZ)
-  try { installHUD(); } catch(_) {}
+// HUD créé après le chargement (déplacé dans boot()) pour ne pas l’afficher sur le Title
+
 
   
 // ——— Gate UI (START sprite + LOADING) ———
@@ -1727,6 +1744,9 @@ if(!ensureCanvas()){
       ensureHelperOverlay().style.display = 'grid';
       helperShown = true;
     }
+    // Installe et affiche le HUD maintenant (pas sur l’écran Title)
+    try { installHUD(); setWanted(); setEggs(); } catch(_) {}
+
     requestAnimationFrame(loop);
   });
 
