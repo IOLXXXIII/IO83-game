@@ -238,6 +238,62 @@ try{
   };
   
 // Déclaré tôt pour éviter la TDZ dans checkAllComplete / checkAbsoluteComplete
+  // Effet : "+1" qui part du centre de l'écran et vole vers un élément compteur (scoreEl / eggNum)
+function flyPlusOne(toEl){
+  if (!toEl || !canvas) return;
+  try{
+    const cRect = canvas.getBoundingClientRect();
+    const tRect = toEl.getBoundingClientRect();
+
+    const startX = cRect.left + cRect.width  / 2;
+    const startY = cRect.top  + cRect.height / 2;
+    const endX   = tRect.left + tRect.width  / 2;
+    const endY   = tRect.top  + tRect.height / 2;
+
+    const col = (getComputedStyle(toEl).color || '#ffcc00');
+
+    const n = document.createElement('div');
+    n.textContent = '+1';
+    Object.assign(n.style, {
+      position: 'fixed',
+      left: '0px',
+      top:  '0px',
+      transform: `translate(${Math.round(startX)}px, ${Math.round(startY)}px) translate(-50%, -50%) scale(1.4)`,
+      transformOrigin: '50% 50%',
+      transition: 'transform 500ms cubic-bezier(.2,.8,.2,1), opacity 500ms',
+      willChange: 'transform, opacity',
+      color: col,
+      fontWeight: '800',
+      fontSize: '42px',
+      lineHeight: '1',
+      textShadow: '0 2px 0 #000, 0 0 6px rgba(0,0,0,.6)',
+      pointerEvents: 'none',
+      userSelect: 'none',
+      zIndex: '9996',
+      opacity: '1'
+    });
+    document.body.appendChild(n);
+
+    // lance la transition
+    requestAnimationFrame(()=>{
+      n.style.transform = `translate(${Math.round(endX)}px, ${Math.round(endY)}px) translate(-50%, -50%) scale(0.6)`;
+      n.style.opacity = '0';
+    });
+
+    // nettoyage
+    setTimeout(()=>{ try{ n.remove(); }catch(_){ /* no-op */ } }, 540);
+  }catch(_){}
+}
+
+// Petit "pulse" visuel sur le compteur touché
+function pulseCounter(el){
+  if (!el) return;
+  const prev = el.style.transition;
+  el.style.transition = 'transform 180ms ease';
+  el.style.transform = 'scale(1.18)';
+  setTimeout(()=>{ el.style.transform = 'scale(1)'; el.style.transition = prev; }, 180);
+}
+
 let mode = 'world';
   setWanted();
   setEggs();
@@ -1305,6 +1361,9 @@ for (const p of posters){
       p.taken = true;
       postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
       setWanted();
+            // Effet "+1" qui vole vers le compteur des posters (scoreNum)
+      if (typeof flyPlusOne === 'function') flyPlusOne(scoreEl || document.getElementById('scoreNum'));
+      if (typeof pulseCounter === 'function')  pulseCounter(scoreEl || document.getElementById('scoreNum'));
       if (sfx.wanted) sfx.wanted.play().catch(()=>{});
 
       // Posters → à 10/10 (une seule fois) : un seul son, pas de double « ding »
@@ -1479,6 +1538,9 @@ dashTrailT=Math.max(0, dashTrailT - dt);
         eggIndex = Math.min(MAX_COUNT_CAP, eggIndex + 1);
 eggs = eggIndex;
 setEggs();
+        // Effet "+1" qui vole vers le compteur des œufs (eggNum)
+        if (typeof flyPlusOne === 'function') flyPlusOne(eggBox || document.getElementById('eggNum'));
+        if (typeof pulseCounter === 'function')  pulseCounter(eggBox || document.getElementById('eggNum'));
 
       }
       interiorOpenIdx=Math.max(1,eggIndex); // 1→10
