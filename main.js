@@ -222,6 +222,8 @@ try{
   let absoluteShown   = false;
   let pendingAbsoluteComplete = false;
   let postersCompleteShown = false;
+  let helperOverlay = null;
+  let helperShown   = false;
 
 
 
@@ -404,6 +406,7 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
     postersCompletePNG:'assets/collectibles/posters_complete.png'+CB,
     allCompletePNG:'assets/collectibles/all_complete.png'+CB,
     absoluteCompletePNG:'assets/collectibles/absolute_complete.png'+CB,
+    helperPNG:'assets/collectibles/helper.png'+CB,
     uiStart:   ['assets/ui/start/start_idle_1.png'+CB, 'assets/ui/start/start_idle_2.png'+CB],
     uiLoading: Array.from({length:5}, (_,i)=>`assets/ui/loading/loading_idle_${i+1}.png${CB}`),
 
@@ -675,6 +678,42 @@ function ensureAbsoluteOverlay(){
   absoluteOverlay=wrap; return wrap;
 }
 
+  
+function ensureHelperOverlay(){
+  if (helperOverlay) return helperOverlay;
+  const wrap = document.createElement('div');
+  Object.assign(wrap.style,{
+    position:'fixed', inset:'0', display:'none', placeItems:'center',
+    background:'rgba(0,0,0,.6)', zIndex:'10001'
+  });
+  const panel = document.createElement('div');
+  Object.assign(panel.style,{
+    padding:'16px', background:'#111', border:'2px solid #444', borderRadius:'12px'
+  });
+  const img = document.createElement('img');
+  img.alt = 'Helper';
+  img.style.maxWidth = 'min(80vw,800px)';
+  img.style.maxHeight= '70vh';
+  img.style.imageRendering = 'pixelated';
+  img.src = ASSETS.helperPNG;
+
+  const btn = document.createElement('button');
+  btn.textContent = 'Close';
+  Object.assign(btn.style,{
+    display:'block', margin:'12px auto 0', padding:'8px 16px',
+    cursor:'pointer', background:'#1b1b1b', color:'#fff',
+    border:'1px solid #555', borderRadius:'8px'
+  });
+  btn.onclick = ()=>{ wrap.style.display='none'; };
+
+  panel.appendChild(img);
+  panel.appendChild(btn);
+  wrap.appendChild(panel);
+  document.body.appendChild(wrap);
+
+  helperOverlay = wrap;
+  return wrap;
+}
 
   
   /* ========== Monde & contenu ========== */
@@ -719,6 +758,7 @@ function loadAll(){
   const L = (src)=>loadImg(src);
   const tasks = [];
   tasks.push(L(ASSETS.absoluteCompletePNG).then(i=>{ images.absoluteComplete = i; }).catch(()=>{}));
+  tasks.push(L(ASSETS.helperPNG).catch(()=>{}));
 
 
   // Fonds
@@ -1619,6 +1659,11 @@ if(!ensureCanvas()){
 
     gate.style.display = 'none';
     if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
+        // Affiche l'aide (helper) dès le début du jeu
+    if (!helperShown) {
+      ensureHelperOverlay().style.display = 'grid';
+      helperShown = true;
+    }
     requestAnimationFrame(loop);
   });
 
