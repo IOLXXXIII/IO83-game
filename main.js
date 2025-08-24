@@ -229,6 +229,13 @@ let scoreWantedUI = null, scoreEggUI = null;
     'padding:0 56px','font:18px/1.1 system-ui','text-shadow:0 1px 0 rgba(0,0,0,.25)'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
+  // Centre chaque libellé au milieu de sa moitié (comme sur ta ref)
+  panel.style.display = 'grid';
+  panel.style.gridTemplateColumns = '1fr 1fr';
+  panel.style.placeItems = 'center';
+  panel.style.justifyContent = 'unset'; // remplace le space-between
+  panel.style.padding = '0 62px';       // marge interne du PNG (ajuste si besoin)
+  panel.style.textAlign = 'center';
 
   const want = document.createElement('span');
   const egg  = document.createElement('span');
