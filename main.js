@@ -210,7 +210,7 @@ try{
 }catch(_){}
 
 // ——— HUD moderne : légende centrée + panneau score top-right ———
-let scoreWantedUI = null, scoreEggUI = null;
+function installHUD(){
 
 (function(){
   const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
@@ -272,7 +272,7 @@ let scoreWantedUI = null, scoreEggUI = null;
   const mk = t => { const s=document.createElement('span'); s.textContent=t; return s; };
   legend.append( mk('← → move'), mk('↑ jump'), mk('×2 → dash'), mk('↓ interact') );
   document.body.appendChild(legend);
-})();
+}
 
 
   // Variables utilisées par checkAllComplete (déclarées AVANT toute utilisation)
@@ -478,6 +478,9 @@ const CB = IS_HTTP ? ('?v=' + Date.now()) : '';
     uiLoading: Array.from({length:5}, (_,i)=>`assets/ui/loading/loading_idle_${i+1}.png${CB}`),
 
   };
+
+  // HUD : création après init d’ASSETS (évite la TDZ)
+  try { installHUD(); } catch(_) {}
 
   
 // ——— Gate UI (START sprite + LOADING) ———
