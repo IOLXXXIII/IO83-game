@@ -216,7 +216,7 @@ try{
 let scoreWantedUI = null, scoreEggUI = null; // utilisés par setWanted/setEggs
 
 function installHUD(){
-  const PANEL_TOP = 18;
+  const PANEL_TOP   = 18;
   const PANEL_RIGHT = 24;
   const PANEL_W = 420, PANEL_H = 94;
 
@@ -231,9 +231,11 @@ function installHUD(){
     'background-repeat:no-repeat','background-position:center','background-size:contain',
     'image-rendering:pixelated','pointer-events:none','z-index:60',
     // grille 2 colonnes, centrage parfait H/V de chaque cellule
-    'display:grid','grid-template-columns:1fr 1fr','place-items:center',
-    'padding:0 62px','font:18px/1.1 system-ui',
-    'text-shadow:0 1px 0 rgba(0,0,0,.25)', // ombre sombre uniquement
+    'display:grid','grid-template-columns:1fr 1fr',
+    'align-items:center','justify-items:center',
+    'padding:0 62px',
+    'font:18px/1 system-ui', // line-height=1 pour un centrage vertical exact
+    'text-shadow:0 1px 0 rgba(0,0,0,.25)', // marquage sombre uniquement
     'text-align:center'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
@@ -244,7 +246,11 @@ function installHUD(){
   // Couleur des libellés (marron) + chiffres en jaune
   const labelColor = '#7a3f12';
   const makeLabel = (el, label, id) => {
-    el.style.whiteSpace = 'nowrap';
+    el.style.cssText = [
+      'white-space:nowrap',
+      'display:flex','align-items:center','justify-content:center',
+      'transform:translateY(1px)' // petit nudge pour compenser l’ombre du PNG
+    ].join(';');
     el.style.color = labelColor;       // ← Wanted / ??? en marron
     el.innerHTML = `${label} <b id="${id}" style="color:${counterColor}">0/10</b>`;
   };
@@ -265,25 +271,42 @@ function installHUD(){
     if (oldEggs) oldEggs.style.display = 'none';
   }catch(_){}
 
-  // — Légende (contrôles) centrée ET alignée en hauteur avec le centre du panneau —
+  // — Légende (contrôles) centrée ET alignée verticalement avec le centre du panneau —
   const legend = document.createElement('div');
   legend.id = 'io83Legend';
   legend.style.cssText = [
     'position:fixed',
-    // centre vertical exactement sur la même "ligne d’horizon" que Wanted/???
     `top:${PANEL_TOP + Math.round(PANEL_H/2)}px`,
     'left:50%','transform:translate(-50%,-50%)',
     'z-index:55','pointer-events:none','opacity:.95',
     'display:flex','gap:28px','align-items:center',
     'font:16px/1.2 system-ui',
-    'color:#000',                           // noir
-    'text-shadow:0 -1px 0 rgba(0,0,0,.45)'  // garde le marquage noir UNIQUEMENT
+    'color:#000',
+    'text-shadow:0 -1px 0 rgba(0,0,0,.45)'
   ].join(';');
   const mk = t => { const s=document.createElement('span'); s.textContent=t; return s; };
   legend.append( mk('← → move'), mk('↑ jump'), mk('×2 → dash'), mk('↓ interact') );
   document.body.appendChild(legend);
 }
 
+// Supprime toute ancienne rangée blanche de contrôles encore présente dans le DOM
+function removeLegacyControlsLegend(){
+  // 1) Ids possibles
+  ['#legend','#controls','#controlsTop','#howto','#tips','#legendTop']
+    .forEach(sel => { const n = document.querySelector(sel); if (n) try{ n.remove(); }catch(_){ } });
+
+  // 2) Heuristique : tout élément (hors #io83Legend) dont le texte contient move+jump+dash+interact
+  document.querySelectorAll('body *:not(#io83Legend)').forEach(el=>{
+    const t = (el.textContent || '').toLowerCase();
+    if(t.includes('move') && t.includes('jump') && t.includes('dash') && t.includes('interact')){
+      // Si ce n’est pas notre légende noire, on supprime
+      if(el.id !== 'io83Legend') try{ el.remove(); }catch(_){}
+    }
+  });
+}
+
+
+  
 
   // Variables utilisées par checkAllComplete (déclarées AVANT toute utilisation)
   let allCompleteOverlay = null;
@@ -1737,6 +1760,8 @@ if(!ensureCanvas()){
       console.warn('[IO83] Fallback actif. Manque :', missing);
     }
 
+
+    
     gate.style.display = 'none';
     if (window.gateUI && window.gateUI.stopAll) window.gateUI.stopAll();
         // Affiche l'aide (helper) dès le début du jeu
@@ -1744,6 +1769,10 @@ if(!ensureCanvas()){
       ensureHelperOverlay().style.display = 'grid';
       helperShown = true;
     }
+
+    // ——— NOUVEAU : retire la rangée blanche héritée ———
+    try { removeLegacyControlsLegend(); } catch(_) {}
+    
     // Installe et affiche le HUD maintenant (pas sur l’écran Title)
     try { installHUD(); setWanted(); setEggs(); } catch(_) {}
 
