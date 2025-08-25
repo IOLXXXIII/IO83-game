@@ -216,9 +216,12 @@ try{
 let scoreWantedUI = null, scoreEggUI = null; // utilisés par setWanted/setEggs
 
 function installHUD(){
+  const SCALE = 0.80;                     // ~20% plus petit
+  const BASE_W = 420, BASE_H = 94;
+  const PANEL_W = Math.round(BASE_W * SCALE); // 336
+  const PANEL_H = Math.round(BASE_H * SCALE); // 75
   const PANEL_TOP   = 18;
   const PANEL_RIGHT = 24;
-  const PANEL_W = 420, PANEL_H = 94;
 
   const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
 
@@ -230,12 +233,11 @@ function installHUD(){
     `width:${PANEL_W}px`, `height:${PANEL_H}px`,
     'background-repeat:no-repeat','background-position:center','background-size:contain',
     'image-rendering:pixelated','pointer-events:none','z-index:60',
-    // grille 2 colonnes, centrage parfait H/V de chaque cellule
     'display:grid','grid-template-columns:1fr 1fr',
     'align-items:center','justify-items:center',
-    'padding:0 62px',
-    'font:18px/1 system-ui', // line-height=1 pour un centrage vertical exact
-    'text-shadow:0 1px 0 rgba(0,0,0,.25)', // marquage sombre uniquement
+    'padding:0 50px',                 // adapté à l’échelle 80 %
+    'font:16px/1 system-ui',          // line-height=1 → centrage vertical exact
+    'text-shadow:0 1px 0 rgba(0,0,0,.25)',
     'text-align:center'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
@@ -243,19 +245,20 @@ function installHUD(){
   const want = document.createElement('span');
   const egg  = document.createElement('span');
 
-  // Couleur des libellés (marron) + chiffres en jaune
+  // Etiquettes : sans «:», ≥ 3 espaces, labels + scores en gras
   const labelColor = '#7a3f12';
-  const makeLabel = (el, label, id) => {
+  const makeCell = (el, label, id) => {
     el.style.cssText = [
       'white-space:nowrap',
-      'display:flex','align-items:center','justify-content:center',
-      'transform:translateY(1px)' // petit nudge pour compenser l’ombre du PNG
+      'display:inline-flex','align-items:center','justify-content:center',
+      'gap:3ch',                     // ≥ 3 espaces visuels
+      'font-weight:700',
+      'color:' + labelColor
     ].join(';');
-    el.style.color = labelColor;       // ← Wanted / ??? en marron
-    el.innerHTML = `${label} <b id="${id}" style="color:${counterColor}">0/10</b>`;
+    el.innerHTML = `<b class="lbl">${label.toLowerCase()}</b><b id="${id}" class="num" style="color:${counterColor}; font-weight:700">0/10</b>`;
   };
-  makeLabel(want, 'Wanted:', 'uiWantedNum');
-  makeLabel(egg , '???',     'uiEggNum');
+  makeCell(want, 'Wanted', 'uiWantedNum');
+  makeCell(egg , '???',     'uiEggNum');
 
   panel.appendChild(want);
   panel.appendChild(egg);
@@ -264,14 +267,14 @@ function installHUD(){
   scoreWantedUI = panel.querySelector('#uiWantedNum');
   scoreEggUI    = panel.querySelector('#uiEggNum');
 
-  // — Masque l’ancien HUD si présent —
+  // masque l’ancien HUD si présent
   try{
     if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display = 'none';
     const oldEggs = document.getElementById('eggs');
     if (oldEggs) oldEggs.style.display = 'none';
   }catch(_){}
 
-  // — Légende (contrôles) centrée ET alignée verticalement avec le centre du panneau —
+  // Légende noire centrée, alignée verticalement sur le centre du panel
   const legend = document.createElement('div');
   legend.id = 'io83Legend';
   legend.style.cssText = [
@@ -289,6 +292,10 @@ function installHUD(){
   document.body.appendChild(legend);
 }
 
+
+
+
+  
 // Supprime toute ancienne rangée blanche de contrôles encore présente dans le DOM
 function removeLegacyControlsLegend(){
   // 1) Ids possibles
@@ -337,43 +344,73 @@ function removeLegacyControlsLegend(){
     checkAllComplete();
     checkAbsoluteComplete(); // ← ajout
   };
+
+
   
-// Déclaré tôt pour éviter la TDZ dans checkAllComplete / checkAbsoluteComplete
-  // Effet : "+1" qui part du centre de l'écran et vole vers un élément compteur (scoreEl / eggNum)
-function flyPlusOne(toEl){
+// Effet “+1” : part d’un point (optionnel) et vole vers un élément du HUD.
+// opts.fromCanvas = {x, y} en coordonnées canvas CSS (après caméra).
+function flyPlusOne(toEl, opts={}){
   if (!toEl || !canvas) return;
   try{
     const cRect = canvas.getBoundingClientRect();
     const tRect = toEl.getBoundingClientRect();
 
-    const startX = cRect.left + cRect.width  / 2;
-    const startY = cRect.top  + cRect.height / 2;
+    const startX = (opts.fromCanvas && typeof opts.fromCanvas.x==='number')
+      ? cRect.left + opts.fromCanvas.x
+      : cRect.left + cRect.width / 2;
+    const startY = (opts.fromCanvas && typeof opts.fromCanvas.y==='number')
+      ? cRect.top  + opts.fromCanvas.y
+      : cRect.top  + cRect.height / 2;
+
     const endX   = tRect.left + tRect.width  / 2;
     const endY   = tRect.top  + tRect.height / 2;
+
+    // Arc vers le haut (Bézier)
+    const ctrlX  = (startX + endX) / 2 + 40;
+    const ctrlY  = Math.min(startY, endY) - 120;
 
     const col = (getComputedStyle(toEl).color || '#ffcc00');
 
     const n = document.createElement('div');
     n.textContent = '+1';
     Object.assign(n.style, {
-      position: 'fixed',
-      left: '0px',
-      top:  '0px',
-      transform: `translate(${Math.round(startX)}px, ${Math.round(startY)}px) translate(-50%, -50%) scale(1.4)`,
-      transformOrigin: '50% 50%',
-      transition: 'transform 500ms cubic-bezier(.2,.8,.2,1), opacity 500ms',
-      willChange: 'transform, opacity',
-      color: col,
-      fontWeight: '800',
-      fontSize: '42px',
-      lineHeight: '1',
-      textShadow: '0 2px 0 #000, 0 0 6px rgba(0,0,0,.6)',
-      pointerEvents: 'none',
-      userSelect: 'none',
-      zIndex: '9996',
-      opacity: '1'
+      position:'fixed', left:'0px', top:'0px',
+      transform:`translate(${Math.round(startX)}px, ${Math.round(startY)}px) translate(-50%, -50%) scale(1.1)`,
+      transformOrigin:'50% 50%',
+      willChange:'transform, opacity, filter',
+      color: col, fontWeight:'800', fontSize:'42px', lineHeight:'1',
+      textShadow:'0 2px 0 #000, 0 0 6px rgba(0,0,0,.6)',
+      pointerEvents:'none', userSelect:'none', zIndex:'9996', opacity:'1'
     });
     document.body.appendChild(n);
+
+    const dur = 650; const t0 = performance.now();
+    (function step(now){
+      let k = (now - t0)/dur; if (k > 1) k = 1;
+      const u = 1 - k;
+      const x = u*u*startX + 2*u*k*ctrlX + k*k*endX;
+      const y = u*u*startY + 2*u*k*ctrlY + k*k*endY;
+      const s = 1.1 - 0.4*k;
+      n.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%) scale(${s})`;
+      n.style.opacity   = String(1 - k*0.9);
+      if (k < 1) requestAnimationFrame(step);
+      else {
+        // flash bref sur la cible
+        try {
+          const prevF = toEl.style.filter, prevT = toEl.style.transition, prevS = toEl.style.transform;
+          toEl.style.transition = 'filter 160ms ease, transform 160ms ease';
+          toEl.style.filter     = 'drop-shadow(0 0 8px rgba(255,209,92,.9))';
+          toEl.style.transform  = 'scale(1.06)';
+          setTimeout(()=>{ toEl.style.filter = prevF || ''; toEl.style.transform = prevS || ''; toEl.style.transition = prevT || ''; }, 180);
+        } catch(_) {}
+        try{ n.remove(); }catch(_){}
+      }
+    })(t0);
+  }catch(_){}
+}
+
+
+  
 
     // lance la transition
     requestAnimationFrame(()=>{
@@ -391,7 +428,7 @@ function pulseCounter(el){
   if (!el) return;
   const prev = el.style.transition;
   el.style.transition = 'transform 180ms ease';
-  el.style.transform = 'scale(1.18)';
+  el.style.transform = 'scale(2.18)';
   setTimeout(()=>{ el.style.transform = 'scale(1)'; el.style.transition = prev; }, 180);
 }
 
@@ -1505,8 +1542,14 @@ for (const p of posters){
       postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
       setWanted();
             // Effet "+1" qui vole vers le compteur des posters (scoreNum)
-      if (typeof flyPlusOne === 'function') flyPlusOne(scoreEl || document.getElementById('scoreNum'));
-      if (typeof pulseCounter === 'function')  pulseCounter(scoreEl || document.getElementById('scoreNum'));
+// centre du poster en coordonnées canvas (après caméra)
+const startPos = {
+  x: (p.x - cameraX) + p.w/2,
+  y: (p.y + camYOffset) + p.h/2
+};
+flyPlusOne(scoreWantedUI || scoreEl || document.getElementById('scoreNum'), { fromCanvas: startPos });
+pulseCounter(scoreWantedUI || scoreEl || document.getElementById('scoreNum'));
+
       if (sfx.wanted) sfx.wanted.play().catch(()=>{});
 
       // Posters → à 10/10 (une seule fois) : un seul son, pas de double « ding »
@@ -1682,8 +1725,11 @@ dashTrailT=Math.max(0, dashTrailT - dt);
 eggs = eggIndex;
 setEggs();
         // Effet "+1" qui vole vers le compteur des œufs (eggNum)
-        if (typeof flyPlusOne === 'function') flyPlusOne(eggBox || document.getElementById('eggNum'));
-        if (typeof pulseCounter === 'function')  pulseCounter(eggBox || document.getElementById('eggNum'));
+// centre du terminal intérieur (déjà défini plus haut : const term = {...})
+const startPos = { x: Math.floor(term.x + term.w/2), y: Math.floor(term.y + term.h/2) };
+flyPlusOne(scoreEggUI || eggBox || document.getElementById('eggNum'), { fromCanvas: startPos });
+pulseCounter(scoreEggUI || eggBox || document.getElementById('eggNum'));
+
 
       }
       interiorOpenIdx=Math.max(1,eggIndex); // 1→10
