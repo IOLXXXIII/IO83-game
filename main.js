@@ -262,6 +262,8 @@ function installHUD(){
     'text-shadow:0 1px 0 rgba(0,0,0,.25)','color:#7a3f12',
     'letter-spacing:0','line-height:1'
   ].join(';');
+  line.style.transform = 'translateY(-3px)'; // remonte légèrement le texte
+
 
   const sp = w => { const s=document.createElement('span'); s.style.cssText=`display:inline-block;width:${w}ch`; return s; };
 
@@ -477,6 +479,8 @@ if (bgm) bgm.volume = 0.6;
 
 // ---- WebAudio pour SFX (BGM reste en HTMLAudio) ----
 let AC = null, sfxGain = null, sfxBuffers = {}, footSrc = null;
+const sfxLastPlay = {}; // anti-spam par SFX
+
 
 function audioCtx(){
   if (!AC){
@@ -514,6 +518,13 @@ function loadAllSfx(){
 }
 
 function playSfx(name, opts = {}){
+  // Anti-spam (évite les redéclenchements à chaque frame)
+  const now = performance.now();
+  const minGapMs = (name === 'getout' || name === 'doorLocked') ? 450 : 0; // ~0.45s
+  const last = sfxLastPlay[name] || 0;
+  if (minGapMs && (now - last) < minGapMs) return null;
+  sfxLastPlay[name] = now;
+
   const buf = sfxBuffers[name];
   if (buf && audioCtx()){
     const src = AC.createBufferSource();
@@ -529,11 +540,12 @@ function playSfx(name, opts = {}){
     if (!src.loop) src.onended = () => { try { g.disconnect(); } catch(_){} };
     return src;
   }
-  // Fallback HTMLAudio (mêmes déclencheurs qu'avant)
+  // Fallback HTMLAudio
   const el = sfxEls[name];
   if (el) { try { el.currentTime = 0; el.play(); } catch(_){} }
   return null;
 }
+
 
 // API publique (appelée par ton start + le moteur)
 const startAudio = () => {
