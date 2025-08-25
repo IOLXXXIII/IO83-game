@@ -455,50 +455,112 @@ let mode = 'world';
   
 
   /* ========== Audio ========== */
-  const bgm=document.getElementById('bgm');
-  const sfx={
-    wanted:document.getElementById('sfxWanted'),
-    dash:document.getElementById('sfxDash'),
-    enter:document.getElementById('sfxEnter'),
-    exit:document.getElementById('sfxExit'),
-    jump:document.getElementById('sfxJump'),
-    type:document.getElementById('sfxType'),
-    ding:document.getElementById('sfxDing'),
-    foot:document.getElementById('sfxFoot'),
-    doorLocked:document.getElementById('sfxDoorLocked')||document.getElementById('sfxGetOut'),
-    getout:document.getElementById('sfxGetOut'),
-    postersComplete:document.getElementById('sfxPostersComplete')
-  };
-  Object.values(sfx).forEach(a=>{
-  if(!a) return;
-  const base = (a===bgm ? 1 : 0.8);
-  const cur  = (typeof a.volume === 'number') ? a.volume : 1;
-  a.volume = base * cur;
-});
+/* ========== Audio (bgm ultra stable + SFX via WebAudio) ========== */
+const bgm = document.getElementById('bgm');
+const sfxEls = {
+  wanted: document.getElementById('sfxWanted'),
+  dash: document.getElementById('sfxDash'),
+  enter: document.getElementById('sfxEnter'),
+  exit: document.getElementById('sfxExit'),
+  jump: document.getElementById('sfxJump'),
+  type: document.getElementById('sfxType'),
+  ding: document.getElementById('sfxDing'),
+  foot: document.getElementById('sfxFoot'),
+  doorLocked: document.getElementById('sfxDoorLocked') || document.getElementById('sfxGetOut'),
+  getout: document.getElementById('sfxGetOut'),
+  postersComplete: document.getElementById('sfxPostersComplete')
+};
 
-  if(sfx.foot) sfx.foot.volume=0.7;
-  const startAudio=()=>{ if(bgm){ bgm.muted=false; bgm.volume=0.6; bgm.currentTime=0; bgm.play().catch(()=>{});} };
-  const footPlay=()=>{ if(!sfx.foot) return; if(sfx.foot.paused) sfx.foot.play().catch(()=>{}); sfx.foot.playbackRate=0.96+Math.random()*0.08; };
-  const footStop=()=>{ if(sfx.foot && !sfx.foot.paused) sfx.foot.pause(); };
+// Volumes fallback (HTMLAudio seulement)
+Object.values(sfxEls).forEach(a => { if (!a) return; if (a !== bgm) a.volume = 0.8; });
+if (bgm) bgm.volume = 0.6;
 
-// --- Helpers audio ---
-function makePool(el, n=3){
-  if(!el) return [];
-  const arr=[];
-  for(let i=0;i<n;i++){ const c=el.cloneNode(true); c.volume=el.volume; arr.push(c); }
-  return arr;
+// ---- WebAudio pour SFX (BGM reste en HTMLAudio) ----
+let AC = null, sfxGain = null, sfxBuffers = {}, footSrc = null;
+
+function audioCtx(){
+  if (!AC){
+    const C = window.AudioContext || window.webkitAudioContext;
+    AC = C ? new C() : null;
+    if (AC){
+      sfxGain = AC.createGain();
+      sfxGain.gain.value = 1;
+      sfxGain.connect(AC.destination);
+    }
+  }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
 }
-const jumpPool = makePool(sfx.jump, 3);
-let jumpPoolIdx = 0;
-function playJump(){
-  if(!sfx.jump) return;
-  const a = jumpPool.length ? jumpPool[(jumpPoolIdx++)%jumpPool.length] : sfx.jump;
-  try{ a.currentTime=0; a.play().catch(()=>{});}catch(_){}
+
+function decodeOne(name, el){
+  const url = (el && (el.currentSrc || el.src)) || null;
+  if (!url || !audioCtx()) return Promise.resolve();
+  return fetch(url)
+    .then(r => r.arrayBuffer())
+    .then(ab => AC.decodeAudioData(ab))
+    .then(buf => { sfxBuffers[name] = buf; })
+    .catch(() => {}); // fallback: on gardera HTMLAudio si échec
 }
-function playDing(){
-  if(!sfx.ding) return;
-  try{ sfx.ding.currentTime=0; sfx.ding.play().catch(()=>{});}catch(_){}
+
+function loadAllSfx(){
+  const tasks = [];
+  // Évite file:// → CORS. En http(s) seulement.
+  if (IS_HTTP && typeof fetch === 'function' && audioCtx()){
+    for (const [name, el] of Object.entries(sfxEls)){
+      if (el) tasks.push(decodeOne(name, el));
+    }
+  }
+  return Promise.allSettled(tasks);
 }
+
+function playSfx(name, opts = {}){
+  const buf = sfxBuffers[name];
+  if (buf && audioCtx()){
+    const src = AC.createBufferSource();
+    src.buffer = buf;
+    src.loop = !!opts.loop;
+    src.playbackRate.value = opts.rate || 1;
+
+    const g = AC.createGain();
+    g.gain.value = (opts.gain != null ? opts.gain : 1);
+
+    src.connect(g).connect(sfxGain);
+    src.start(0);
+    if (!src.loop) src.onended = () => { try { g.disconnect(); } catch(_){} };
+    return src;
+  }
+  // Fallback HTMLAudio (mêmes déclencheurs qu'avant)
+  const el = sfxEls[name];
+  if (el) { try { el.currentTime = 0; el.play(); } catch(_){} }
+  return null;
+}
+
+// API publique (appelée par ton start + le moteur)
+const startAudio = () => {
+  if (bgm){
+    bgm.muted = false;
+    try { bgm.play(); } catch(_) {}
+  }
+  audioCtx(); // crée/réveille pour SFX
+};
+
+// Fonctions que tu utilises déjà
+function playJump(){ playSfx('jump'); }
+function playDing(){ playSfx('ding'); }
+
+// Footsteps (boucle)
+function footPlay(){
+  const rate = 0.96 + Math.random()*0.08;
+  if (!footSrc){
+    footSrc = playSfx('foot', { loop:true, rate, gain:0.7 });
+  } else if (footSrc.playbackRate){
+    footSrc.playbackRate.value = rate;
+  }
+}
+function footStop(){
+  if (footSrc){ try { footSrc.stop(); } catch(_){} footSrc = null; }
+}
+
 
 
   
@@ -1007,6 +1069,7 @@ tasks.push((async ()=>{
   tasks.push(Promise.all(ASSETS.interiorOpens     .map(L)).then(arr=>{ images.interiorOpens      = arr.filter(Boolean); }).catch(()=>{}));
   tasks.push(L(ASSETS.postersCompletePNG).then(i=>{ images.postersComplete = i; }).catch(()=>{}));
   tasks.push(L(ASSETS.allCompletePNG    ).then(i=>{ images.allComplete     = i; }).catch(()=>{}));
+  tasks.push(loadAllSfx());
 
   // Pare-chocs global : ne REJETTE JAMAIS
   return Promise.allSettled(tasks).then(function(){
@@ -1393,6 +1456,8 @@ function tryDash(dir){
   player.facing = dir;
   addShake(0.4);
   if(sfx.dash) sfx.dash.play().catch(()=>{});
+  playSfx('dash');
+
 }
 
 
@@ -1566,10 +1631,13 @@ flyPlusOne(scoreWantedUI || scoreEl || document.getElementById('scoreNum'), { fr
 pulseCounter(scoreWantedUI || scoreEl || document.getElementById('scoreNum'));
 
       if (sfx.wanted) sfx.wanted.play().catch(()=>{});
+      playSfx('wanted');
 
       // Posters → à 10/10 (une seule fois) : un seul son, pas de double « ding »
       if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
         if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
+        if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
+        playSfx('postersComplete');
         ensureOverlay().style.display = 'grid';
         postersCompleteShown = true;
       }
@@ -1606,13 +1674,20 @@ if (b.canEnterPossible){
   if(sfx.doorLocked){
     try { sfx.doorLocked.currentTime = 0; sfx.doorLocked.play(); } catch(_){}
   }
+  playSfx('doorLocked');
   break;
 }
         }
       }
       if(endWall){
         if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) if(sfx.getout) sfx.getout.play().catch(()=>{});
+        if(endWall){
+        if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) playSfx('getout');
+ }
       }
+if(endWall){
+if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) playSfx('getout');
+  }
     }
 
 // Caméra (lookahead + micro shake)
@@ -1663,7 +1738,8 @@ function exitInterior(){
   mode='world';
   if(bgm){ bgm.volume=0.6; }
   if(sfx.exit) sfx.exit.play().catch(()=>{});
-
+  playSfx('exit');
+  
   if(currentB){
     player.x=currentB.doorX+currentB.doorW/2;
     player.y=0; player.vy=0; player.onGround=true;
@@ -1730,6 +1806,7 @@ dashTrailT=Math.max(0, dashTrailT - dt);
   const inTerm=aabb(myoRect.x,myoRect.y,myoRect.w,myoRect.h, term.x,term.y,term.w,term.h);
 
   if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; if(sfx.type) sfx.type.play().catch(()=>{}); }
+  if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; playSfx('type'); }
   if(hacking){
     hackT+=dt;
     if(hackT>=1.5){
