@@ -1455,7 +1455,6 @@ function tryDash(dir){
   dashTrailT = DASH_TRAIL_VIS;   // lance l’anim du trail (durée un peu plus longue)
   player.facing = dir;
   addShake(0.4);
-  if(sfx.dash) sfx.dash.play().catch(()=>{});
   playSfx('dash');
 
 }
@@ -1621,28 +1620,23 @@ for (const p of posters){
       p.taken = true;
       postersCount = Math.min(MAX_COUNT_CAP, postersCount + 1);
       setWanted();
-            // Effet "+1" qui vole vers le compteur des posters (scoreNum)
-// centre du poster en coordonnées canvas (après caméra)
-const startPos = {
-  x: (p.x - cameraX) + p.w/2,
-  y: (p.y + camYOffset) + p.h/2
-};
-flyPlusOne(scoreWantedUI || scoreEl || document.getElementById('scoreNum'), { fromCanvas: startPos });
-pulseCounter(scoreWantedUI || scoreEl || document.getElementById('scoreNum'));
 
-      if (sfx.wanted) sfx.wanted.play().catch(()=>{});
+      // +1 qui vole vers le compteur wanted
+      const startPos = { x: (p.x - cameraX) + p.w/2, y: (p.y + camYOffset) + p.h/2 };
+      flyPlusOne(scoreWantedUI || scoreEl || document.getElementById('scoreNum'), { fromCanvas: startPos });
+      pulseCounter(scoreWantedUI || scoreEl || document.getElementById('scoreNum'));
+
+      // Son
       playSfx('wanted');
 
-      // Posters → à 10/10 (une seule fois) : un seul son, pas de double « ding »
+      // Posters complets (10/10) – une seule fois
       if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
-        if (sfx.postersComplete) sfx.postersComplete.play().catch(()=>{});
-        if (!postersCompleteShown && postersCount >= POSTERS_TOTAL){
         playSfx('postersComplete');
         ensureOverlay().style.display = 'grid';
         postersCompleteShown = true;
       }
 
-      // Re-affichage "all_complete" à 11/10 + son (si Absolute pas vrai)
+      // Re-affichage "all_complete" à 11/10 (si Absolute pas vrai)
       if (allCompleteShown && !allCompleteReshown && eggs >= 10 && postersCount >= 11 && !(eggs >= 11 && postersCount >= 11)) {
         setTimeout(()=>{
           ensureAllCompleteOverlay().style.display = 'grid';
@@ -1654,42 +1648,37 @@ pulseCounter(scoreWantedUI || scoreEl || document.getElementById('scoreNum'));
   }
 }
 
-
-
-    
-    // Portes
-    if(wantsDown && !onPlatform && dropThrough<=0){
-      for(const b of buildings){
-        const atDoor=(player.x>b.doorX && player.x<b.doorX+b.doorW);
-        const feet=GROUND_Y+player.y, base=b.y+b.dh;
-        const nearBase=Math.abs(feet-base)<280;
-        if(atDoor && nearBase){
-if (b.canEnterPossible){
-  // Bâtiments 2/3 : toujours ré-ouvrables, re-entry infini
-  b.wasOpen = true;
-  triedDoor.add(b.id);
-  enterInterior(b);
-  break;
-} else {
-  if(sfx.doorLocked){
-    try { sfx.doorLocked.currentTime = 0; sfx.doorLocked.play(); } catch(_){}
-  }
-  playSfx('doorLocked');
-  break;
-}
-        }
+// Portes
+if(wantsDown && !onPlatform && dropThrough<=0){
+  for(const b of buildings){
+    const atDoor=(player.x>b.doorX && player.x<b.doorX+b.doorW);
+    const feet=GROUND_Y+player.y, base=b.y+b.dh;
+    const nearBase=Math.abs(feet-base)<280;
+    if(atDoor && nearBase){
+      if (b.canEnterPossible){
+        // ré-ouvrables (2/3)
+        b.wasOpen = true;
+        triedDoor.add(b.id);
+        enterInterior(b);
+        break;
+      } else {
+        playSfx('doorLocked');
+        break;
       }
-      if(endWall){
-        if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) if(sfx.getout) sfx.getout.play().catch(()=>{});
-        if(endWall){
-        if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) playSfx('getout');
- }
-      }
-if(endWall){
-if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20) playSfx('getout');
-  }
     }
+  }
+  // Mur de fin → "get out"
+  if(endWall){
+    if(player.x > endWall.x-20 && player.x < endWall.x+endWall.dw+20){
+      playSfx('getout');
+    }
+  }
+}
 
+
+
+
+  
 // Caméra (lookahead + micro shake)
 const W=canvas.width/DPR;
 const speedRatio = Math.min(1, Math.abs(vx)/MOVE_SPEED);
@@ -1737,7 +1726,6 @@ camYOffset += shY;
 function exitInterior(){
   mode='world';
   if(bgm){ bgm.volume=0.6; }
-  if(sfx.exit) sfx.exit.play().catch(()=>{});
   playSfx('exit');
   
   if(currentB){
