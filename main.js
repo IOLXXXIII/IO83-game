@@ -223,8 +223,8 @@ function installHUD(){
   const PANEL_TOP   = 18;
   const PANEL_RIGHT = 24;
 
+  // Une seule déclaration ici
   const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
-
 
   // — Score panel (fond PNG + ligne unique centrée) —
   const panel = document.createElement('div');
@@ -234,32 +234,28 @@ function installHUD(){
     `width:${PANEL_W}px`, `height:${PANEL_H}px`,
     'background-repeat:no-repeat','background-position:center','background-size:contain',
     'image-rendering:pixelated','pointer-events:none','z-index:60',
-    // on ne centre PAS ici — seulement un conteneur qui remplit le panel
     'display:block'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
   document.body.appendChild(panel);
 
-  // Remplit le panel et centre au **millimètre** horizontalement & verticalement
   const inner = document.createElement('div');
   inner.style.cssText = [
     'position:absolute','inset:0',
-    'display:grid','place-items:center',       // centre pile (H & V)
-    'padding:0 32px',                          // marge interne gauche/droite
+    'display:grid','place-items:center',
+    'padding:0 32px',
     'white-space:nowrap'
   ].join(';');
   panel.appendChild(inner);
 
-  // Ligne en monospace + chiffres tabulaires → espacements stables
   const line = document.createElement('span');
   line.style.cssText = [
     'display:inline-flex','align-items:center','justify-content:center',
     'font:16px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
     'text-shadow:0 1px 0 rgba(0,0,0,.25)','color:#7a3f12',
-    'letter-spacing:0' // pas d’espacement parasite
+    'letter-spacing:0'
   ].join(';');
 
-  const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
   const sp = w => { const s=document.createElement('span'); s.style.cssText=`display:inline-block;width:${w}ch`; return s; };
 
   const wantedLbl = document.createElement('b');
@@ -289,16 +285,14 @@ function installHUD(){
   scoreWantedUI = wantedNum;
   scoreEggUI    = eggNum;
 
-  // masque l’ancien HUD si présent (inchangé)
+  // masque l’ancien HUD si présent
   try{
     if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display = 'none';
     const oldEggs = document.getElementById('eggs');
     if (oldEggs) oldEggs.style.display = 'none';
   }catch(_){}
 
-
-
-  // Légende noire centrée, alignée verticalement sur le centre du panel
+  // Légende noire centrée
   const legend = document.createElement('div');
   legend.id = 'io83Legend';
   legend.style.cssText = [
@@ -315,6 +309,7 @@ function installHUD(){
   legend.append( mk('← → move'), mk('↑ jump'), mk('×2 → dash'), mk('↓ interact') );
   document.body.appendChild(legend);
 }
+
 
 
 
