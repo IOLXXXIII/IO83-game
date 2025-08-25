@@ -410,25 +410,15 @@ function flyPlusOne(toEl, opts={}){
 }
 
 
+
   
-
-    // lance la transition
-    requestAnimationFrame(()=>{
-      n.style.transform = `translate(${Math.round(endX)}px, ${Math.round(endY)}px) translate(-50%, -50%) scale(0.6)`;
-      n.style.opacity = '0';
-    });
-
-    // nettoyage
-    setTimeout(()=>{ try{ n.remove(); }catch(_){ /* no-op */ } }, 540);
-  }catch(_){}
-}
 
 // Petit "pulse" visuel sur le compteur touché
 function pulseCounter(el){
   if (!el) return;
   const prev = el.style.transition;
   el.style.transition = 'transform 180ms ease';
-  el.style.transform = 'scale(2.18)';
+  el.style.transform = 'scale(1.28)';
   setTimeout(()=>{ el.style.transform = 'scale(1)'; el.style.transition = prev; }, 180);
 }
 
