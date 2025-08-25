@@ -262,7 +262,7 @@ function installHUD(){
     'text-shadow:0 1px 0 rgba(0,0,0,.25)','color:#7a3f12',
     'letter-spacing:0','line-height:1'
   ].join(';');
-  line.style.transform = 'translateY(-3px)'; // remonte légèrement le texte
+  line.style.transform = 'translateY(-4px)'; // remonte légèrement le texte
 
 
   const sp = w => { const s=document.createElement('span'); s.style.cssText=`display:inline-block;width:${w}ch`; return s; };
