@@ -223,10 +223,14 @@ function installHUD(){
   const PANEL_TOP   = 18;
   const PANEL_RIGHT = 24;
 
-  // Une seule déclaration ici
+  // Ajuste ces deux valeurs si jamais ton PNG change (ce sont les bordures visuelles internes)
+  const PANEL_INSET_TOP    = Math.round(12 * SCALE);  // marge visuelle haute interne du PNG
+  const PANEL_INSET_BOTTOM = Math.round(12 * SCALE);  // marge visuelle basse interne du PNG
+  const H_PAD = 32;                                   // padding gauche/droite identique à avant
+
   const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
 
-  // — Score panel (fond PNG + ligne unique centrée) —
+  // — Score panel —
   const panel = document.createElement('div');
   panel.id = 'scorePanel';
   panel.style.cssText = [
@@ -234,26 +238,29 @@ function installHUD(){
     `width:${PANEL_W}px`, `height:${PANEL_H}px`,
     'background-repeat:no-repeat','background-position:center','background-size:contain',
     'image-rendering:pixelated','pointer-events:none','z-index:60',
-    'display:block'
+    'display:block','contain:paint'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
   document.body.appendChild(panel);
 
+  // Zone intérieure EXACTE du “cartouche” (top/bottom insets respectés)
   const inner = document.createElement('div');
   inner.style.cssText = [
-    'position:absolute','inset:0',
-    'display:grid','place-items:center',
-    'padding:0 32px',
+    'position:absolute',
+    `left:${H_PAD}px`, `right:${H_PAD}px`,
+    `top:${PANEL_INSET_TOP}px`, `bottom:${PANEL_INSET_BOTTOM}px`,
+    'display:flex','align-items:center','justify-content:center',
     'white-space:nowrap'
   ].join(';');
   panel.appendChild(inner);
 
+  // Ligne de texte (aucun surplus vertical)
   const line = document.createElement('span');
   line.style.cssText = [
     'display:inline-flex','align-items:center','justify-content:center',
     'font:16px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
     'text-shadow:0 1px 0 rgba(0,0,0,.25)','color:#7a3f12',
-    'letter-spacing:0'
+    'letter-spacing:0','line-height:1'
   ].join(';');
 
   const sp = w => { const s=document.createElement('span'); s.style.cssText=`display:inline-block;width:${w}ch`; return s; };
@@ -292,7 +299,7 @@ function installHUD(){
     if (oldEggs) oldEggs.style.display = 'none';
   }catch(_){}
 
-  // Légende noire centrée
+  // Légende noire centrée (inchangé)
   const legend = document.createElement('div');
   legend.id = 'io83Legend';
   legend.style.cssText = [
@@ -301,8 +308,7 @@ function installHUD(){
     'left:50%','transform:translate(-50%,-50%)',
     'z-index:55','pointer-events:none','opacity:.95',
     'display:flex','gap:28px','align-items:center',
-    'font:16px/1.2 system-ui',
-    'color:#000',
+    'font:16px/1.2 system-ui','color:#000',
     'text-shadow:0 -1px 0 rgba(0,0,0,.45)'
   ].join(';');
   const mk = t => { const s=document.createElement('span'); s.textContent=t; return s; };
