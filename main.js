@@ -1793,12 +1793,11 @@ dashTrailT=Math.max(0, dashTrailT - dt);
   const myoH=MYO_H_INTERIOR, myoRect={ x:player.x-24, y:(floorY - myoH + player.y + INTERIOR_FOOT_EXTRA), w:48, h:myoH };
   const inTerm=aabb(myoRect.x,myoRect.y,myoRect.w,myoRect.h, term.x,term.y,term.w,term.h);
 
-  if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; if(sfx.type) sfx.type.play().catch(()=>{}); }
   if(!hacking && wantsDown && inTerm){ hacking=true; hackT=0; playSfx('type'); }
   if(hacking){
     hackT+=dt;
     if(hackT>=1.5){
-      hacking=false; hackT=0; if(sfx.ding) sfx.ding.play().catch(()=>{});
+      hacking=false; hackT=0; playDing();
       if(currentB && !hackedIds.has(currentB.id)){
         hackedIds.add(currentB.id);
         eggIndex = Math.min(MAX_COUNT_CAP, eggIndex + 1);
