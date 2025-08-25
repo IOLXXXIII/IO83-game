@@ -226,7 +226,7 @@ function installHUD(){
   const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
 
 
-  // — Score panel (fond PNG + ligne unique mono, centrée) —
+  // — Score panel (fond PNG + ligne unique centrée) —
   const panel = document.createElement('div');
   panel.id = 'scorePanel';
   panel.style.cssText = [
@@ -234,56 +234,56 @@ function installHUD(){
     `width:${PANEL_W}px`, `height:${PANEL_H}px`,
     'background-repeat:no-repeat','background-position:center','background-size:contain',
     'image-rendering:pixelated','pointer-events:none','z-index:60',
-    'font:16px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-    'text-shadow:0 1px 0 rgba(0,0,0,.25)',
-    'color:#7a3f12',                 // couleur des labels
-    'line-height:1',
-    'display:block'                  // on gère l’alignement avec un inner absoluté
+    // on ne centre PAS ici — seulement un conteneur qui remplit le panel
+    'display:block'
   ].join(';');
   panel.style.backgroundImage = `url(${ASSETS.scorePanelPNG})`;
   document.body.appendChild(panel);
 
-  // conteneur qui remplit le panel et centre pile au milieu (H + V)
+  // Remplit le panel et centre au **millimètre** horizontalement & verticalement
   const inner = document.createElement('div');
   inner.style.cssText = [
     'position:absolute','inset:0',
-    'display:flex','align-items:center','justify-content:center',
-    'padding:0 42px',               // garde un peu d’air à gauche/droite
+    'display:grid','place-items:center',       // centre pile (H & V)
+    'padding:0 32px',                          // marge interne gauche/droite
     'white-space:nowrap'
   ].join(';');
   panel.appendChild(inner);
 
-  // petits espaciements en unités "ch" (3 / 8 / 3)
+  // Ligne en monospace + chiffres tabulaires → espacements stables
+  const line = document.createElement('span');
+  line.style.cssText = [
+    'display:inline-flex','align-items:center','justify-content:center',
+    'font:16px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+    'text-shadow:0 1px 0 rgba(0,0,0,.25)','color:#7a3f12',
+    'letter-spacing:0' // pas d’espacement parasite
+  ].join(';');
+
+  const counterColor = (scoreEl && getComputedStyle(scoreEl).color) || '#FFD15C';
   const sp = w => { const s=document.createElement('span'); s.style.cssText=`display:inline-block;width:${w}ch`; return s; };
 
-  // ligne unique : wanted   0/10        ???   0/10
-  const line = document.createElement('span');
-  line.style.cssText = 'display:inline-flex; align-items:center; justify-content:center;';
-
   const wantedLbl = document.createElement('b');
-  wantedLbl.className = 'lbl';
-  wantedLbl.textContent = 'wanted';
-  wantedLbl.style.cssText = 'font-weight:700;';
+  wantedLbl.className='lbl';
+  wantedLbl.textContent='wanted';
 
   const wantedNum = document.createElement('b');
-  wantedNum.id = 'uiWantedNum';
-  wantedNum.className = 'num';
-  wantedNum.textContent = '0/10';
+  wantedNum.id='uiWantedNum';
+  wantedNum.className='num';
+  wantedNum.textContent='0/10';
   wantedNum.style.cssText = `font-weight:800; color:${counterColor}; font-variant-numeric:tabular-nums;`;
 
   const eggLbl = document.createElement('b');
-  eggLbl.className = 'lbl';
-  eggLbl.textContent = '???';
-  eggLbl.style.cssText = 'font-weight:700; margin-left:0;';
+  eggLbl.className='lbl';
+  eggLbl.textContent='???';
 
   const eggNum = document.createElement('b');
-  eggNum.id = 'uiEggNum';
-  eggNum.className = 'num';
-  eggNum.textContent = '0/10';
+  eggNum.id='uiEggNum';
+  eggNum.className='num';
+  eggNum.textContent='0/10';
   eggNum.style.cssText = `font-weight:800; color:${counterColor}; font-variant-numeric:tabular-nums;`;
 
-  // assemble : wanted (3) 0/10 (8) ??? (3) 0/10
-  line.append(wantedLbl, sp(3), wantedNum, sp(8), eggLbl, sp(3), eggNum);
+  // Espacements : wanted (2) 0/10 (4) ??? (2) 0/10
+  line.append(wantedLbl, sp(2), wantedNum, sp(4), eggLbl, sp(2), eggNum);
   inner.appendChild(line);
 
   scoreWantedUI = wantedNum;
@@ -295,6 +295,7 @@ function installHUD(){
     const oldEggs = document.getElementById('eggs');
     if (oldEggs) oldEggs.style.display = 'none';
   }catch(_){}
+
 
 
   // Légende noire centrée, alignée verticalement sur le centre du panel
