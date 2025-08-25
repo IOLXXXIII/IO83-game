@@ -1766,10 +1766,20 @@ function updateInterior(dt){
 dashCooldown=Math.max(0,dashCooldown-dt);
 dashTrailT=Math.max(0, dashTrailT - dt);
 
-  if(jumpBuf>0){
-    if(player.onGround||coyote>0){ player.vy=-JUMP_VELOCITY; player.onGround=false; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
-    else if(airJumpsUsed<AIR_JUMPS){ airJumpsUsed++; player.vy=-JUMP_VELOCITY; jumpBuf=0; if(sfx.jump) sfx.jump.play().catch(()=>{}); }
+if (jumpBuf > 0) {
+  if (player.onGround || coyote > 0) {
+    player.vy = -JUMP_VELOCITY;
+    player.onGround = false;
+    jumpBuf = 0;
+    playJump(); // même fonction SFX que dehors
+  } else if (airJumpsUsed < AIR_JUMPS) {
+    airJumpsUsed++;
+    player.vy = -JUMP_VELOCITY;
+    jumpBuf = 0;
+    playJump(); // même fonction SFX que dehors
   }
+}
+
   if(dashTimer<=0){
     if(player.vy<0){
       let g = GRAVITY_UP;
