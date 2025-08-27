@@ -340,6 +340,45 @@ function removeLegacyControlsLegend(){
 }
 
 
+
+// ========== Smartphone notice (non-playable on phone) ==========
+function isSmartphone(){
+  // Détection "smartphone" sans attraper les iPad/Chromebook
+  const ua = navigator.userAgent || navigator.vendor || window.opera || "";
+  const isPhoneUA = /Android.+Mobile|iPhone|iPod/i.test(ua); // Android phone, iPhone, iPod
+  const isCoarse  = window.matchMedia && matchMedia("(pointer:coarse)").matches;
+  const narrow    = Math.min(window.innerWidth, window.innerHeight) <= 820; // écran plutôt étroit
+  return isPhoneUA || (isCoarse && narrow);
+}
+
+function showMobileWarning(){
+  // Si déjà présent on ne recrée pas
+  if (document.getElementById('mobileWarning')) return;
+
+  const warn = document.createElement('div');
+  warn.id = 'mobileWarning';
+  warn.textContent = "⚠️ This game is not playable on smartphones. Please use a computer.";
+  Object.assign(warn.style, {
+    position: 'fixed',
+    top: '12px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    background: 'rgba(0,0,0,0.75)',
+    color: '#FFD15C',
+    padding: '8px 14px',
+    font: '14px/1.4 system-ui, sans-serif',
+    border: '1px solid #444',
+    borderRadius: '10px',
+    zIndex: '99999',
+    pointerEvents: 'none',   // n’intercepte pas les clics
+    textAlign: 'center',
+    maxWidth: '92vw',
+    boxShadow: '0 4px 16px rgba(0,0,0,.35)'
+  });
+  document.body.appendChild(warn);
+}
+
+  
   
 
   // Variables utilisées par checkAllComplete (déclarées AVANT toute utilisation)
@@ -1922,6 +1961,9 @@ if(!ensureCanvas()){
     
     // Installe et affiche le HUD maintenant (pas sur l’écran Title)
     try { installHUD(); setWanted(); setEggs(); } catch(_) {}
+
+    // Smartphone banner (uniquement après affichage du perso)
+    try { if (isSmartphone()) showMobileWarning(); } catch(_) {}
 
     requestAnimationFrame(loop);
   });
