@@ -990,6 +990,33 @@ function ensureHelperOverlay(){
   return wrap;
 }
 
+
+// --- Helpers dialogs: ordre mélangé par PNJ (Maonis/Kahikoans) ---
+function shuffled(arr){
+  const a = arr.slice();
+  for (let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+function getDialogOrderFor(n){
+  // base = toutes les images de dialogues pour ce type
+  const base = (images.dialogs && images.dialogs[n.type]) ? images.dialogs[n.type] : [];
+  // (Re)construit si vide ou si la taille a changé (chargements asynchrones)
+  if (!n.dialogOrder || n.dialogOrder.length !== base.length){
+    if (n.type === 'maonis' || n.type === 'kahikoans'){
+      n.dialogOrder = shuffled(base);
+    } else {
+      n.dialogOrder = base.slice();
+    }
+    n.dialogIdx = -1; // on repart proprement
+  }
+  return n.dialogOrder;
+}
+
+ 
   
   /* ========== Monde & contenu ========== */
   const BUILDING_TARGET_H=Math.round(450*1.15);
@@ -1191,6 +1218,8 @@ function buildWorld(){
 
   let x = worldStartX;
   const blockRects = [];
+  let lastNpcType = null;
+  let sameTypeStreak = 0;
 
   // ——— Génération des blocs : 3 bâtiments + 1 PNJ + 1 poster par bloc ———
   for (let b = 0; b < NUM_BLOCKS; b++) {
@@ -1321,13 +1350,34 @@ npcs.push({
 };
     
 
-    // Choix du PNJ de ce bloc (Aeron tôt, sinon Maonis/Kahikoans, et Kaito si bloc Kaito)
-    const firstThird = Math.max(1, Math.floor(NUM_BLOCKS/3));
-    let npcType = 'kahikoans';
-    // place Aeron dans le premier tiers (une seule fois)
-    if (!buildWorld._aeronPlaced && b < firstThird) { npcType='aeron'; buildWorld._aeronPlaced = true; }
-    else if (Math.random() < NPC_MAONIS_RATE)        { npcType='maonis'; }
-    if (b === KAITO_BLOCK)                           { npcType='kaito'; } // bloc Kaito → PNJ = Kaito
+// Choix du PNJ de ce bloc (Aeron tôt, Kaito fixe, sinon Maonis/Kahikoans mixés)
+const firstThird = Math.max(1, Math.floor(NUM_BLOCKS/3));
+let npcType;
+
+// 1) Emplacements figés
+if (b === KAITO_BLOCK){
+  npcType = 'kaito';
+}
+else if (!buildWorld._aeronPlaced && b < firstThird){
+  npcType = 'aeron';
+  buildWorld._aeronPlaced = true;
+}
+else {
+  // 2) Maonis / Kahikoans avec anti-streak (pas 3 identiques d'affilée)
+  const coin = Math.random() < 0.5 ? 'maonis' : 'kahikoans';
+  let wanted = coin;
+
+  if (lastNpcType && sameTypeStreak >= 2){
+    // forcer l'autre type pour casser la série
+    wanted = (lastNpcType === 'maonis') ? 'kahikoans' : 'maonis';
+  }
+
+  npcType = wanted;
+
+  if (npcType === lastNpcType) sameTypeStreak++;
+  else { lastNpcType = npcType; sameTypeStreak = 1; }
+}
+
 
     // Affectation gap → éléments
     if (roleAfter0 === 'poster') placePosterInGap(gap01L,gap01R);
@@ -1626,35 +1676,32 @@ if(!wasOnGround && player.onGround){
 // PNJ talk : SANS tempo → à chaque entrée dans la zone, bulle suivante (boucle)
 for (const n of npcs){
   const near = Math.abs(player.x - n.x) <= NPC_TALK_RADIUS;
-  const list = images.dialogs[n.type] || [];
+  const list = getDialogOrderFor(n); // <<< ordre mélangé par PNJ si maonis/kahikoans
 
   if (near){
     if (!n.show){
-      // entrée dans le rayon → bulle suivante (boucle complète)
       n.show = true;
       n.hideT = 0;
       if (list.length){
         if (typeof n.dialogIdx !== 'number') n.dialogIdx = -1;
-        n.dialogIdx = (n.dialogIdx + 1) % list.length; // -1 → 0 à la première entrée
+        n.dialogIdx = (n.dialogIdx + 1) % list.length; // on conserve la rotation
         n.dialogImg = list[n.dialogIdx];
       } else {
         n.dialogImg = null;
       }
     } else {
-      // on reste dans le rayon → on garde la même bulle
       n.hideT = 0;
     }
   } else if (n.show){
-    // sortie du rayon → masquage après un court délai
     n.hideT = (n.hideT || 0) + dt;
     if (n.hideT >= NPC_HIDE_DELAY){
       n.show = false;
       n.hideT = 0;
       n.dialogImg = null;
-      // on conserve n.dialogIdx pour reprendre à la suivante à la prochaine entrée
     }
   }
 }
+
 
     
 
