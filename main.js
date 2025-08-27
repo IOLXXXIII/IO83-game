@@ -91,7 +91,14 @@ function onStart(e){
   
 
   // >>> IMPORTANT : garder l’écran titre visible et afficher ton LOADING tout de suite
-  if (window.gateUI && window.gateUI.showLoading) window.gateUI.showLoading();
+  if (window.gateUI){
+  if (isSmartphone()){
+    if (window.gateUI.stopAll) window.gateUI.stopAll();
+  } else if (window.gateUI.showLoading){
+    window.gateUI.showLoading();
+  }
+}
+
   cleanup();                // on débranche les listeners "start"
 
 
@@ -1920,7 +1927,16 @@ function assetsCruciauxOk(){
 /* ========== Boot ========== */
 function boot(){
   if (startBtn) startBtn.disabled = true;
-  if (window.gateUI && window.gateUI.showLoading) window.gateUI.showLoading();
+if (window.gateUI){
+  if (isSmartphone()){
+    // Sur smartphone : pas de loading → on coupe toutes les UI du gate
+    if (window.gateUI.stopAll) window.gateUI.stopAll();
+  } else if (window.gateUI.showLoading){
+    // Desktop : comportement inchangé, on montre "LOADING"
+    window.gateUI.showLoading();
+  }
+}
+
 
 if(!ensureCanvas()){
   if (startBtn) startBtn.disabled = false;
